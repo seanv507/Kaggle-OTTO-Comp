@@ -1,0 +1,118 @@
+[project]
+name = "otto"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beartype>=0.22.9",
+    "boto3>=1.38.18",
+    "graphviz>=0.20.3",
+    "ipykernel>=6.29.5",
+    "jupyter>=1.1.1",
+    "jupyterlab>=4.4.2",
+    "lifetimes>=0.11.3",
+    "lightning>=2.5.1.post0",
+    "loguru>=0.7.3",
+    "mlcroissant>=1.0.17",
+    "neptune>=1.14.0",
+    "numpy>=2.2.6",
+    "pandas>=2.2.3",
+    #"polars-lts-cpu>=1.29.0",
+    "polars-ds>=0.10.4",
+    "polars[all]>=1.37.0",
+    #"pyarrow>=17.0.0",
+    "pymc-marketing>=0.14.0",
+    #"ray[data,serve,train,tune]>=2.46.0",
+    "rich>=14.0.0",
+    "scikit-learn>=1.6.1",
+    "scipy>=1.15.3",
+    "tensordict", # for torchrec
+    #"torch>=2.9.1",
+    #"torchmetrics>=1.7.1",
+    #"torchmetrics==1.0.3", # needed for torchrec
+    #"torchrec>=1.4.0",
+    #"torchvision>=0.24.0",
+    "xgboost>=3.0.1",
+]
+
+
+
+[project.optional-dependencies]
+cpu = [
+  "torch>=2.9.1",
+  "torchvision>=0.24.0",
+  "torchrec>=1.4.0"
+]
+cu129 = [
+  "torch>=2.9.1",
+  "torchvision>=0.24.0",
+  "torchrec>=1.4.0",
+  "fbgemm_gpu>=1.4.1"
+]
+
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu129" },
+  ],
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu129", extra = "cu129" },
+]
+torchvision = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu129", extra = "cu129" },
+]
+torchrec = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu129", extra = "cu129" },
+]
+fbgemm_gpu =  [
+  { index = "pytorch-fbgemm-gpu", extra = "cu129" },
+]
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-fbgemm-gpu"
+#url = "https://download.pytorch.org/whl/fbgemm-gpu"
+url = "https://download.pytorch.org/whl/cu129"
+# cu130 whl directory only has version 0.6 https://download.pytorch.org/whl/cu130/fbgemm-gpu/
+# https://docs.pytorch.org/FBGEMM/fbgemm_gpu/development/InstallationInstructions.html#install-the-fbgemm-gpu-package
+# https://download.pytorch.org/whl/cu129/fbgemm-gpu/
+explicit = true
+
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "plotnine>=0.14.5",
+    "pytest>=8.3.5",
+    "ruff>=0.11.10",
+]
+
+
+#[build-system]
+#requires = ["hatchling"]
+#build-backend = "hatchling.build"
+
+
+[tool.ruff.lint]
+extend-select = ["B"]
+
