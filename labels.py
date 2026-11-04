@@ -2,6 +2,8 @@
 from beartype import beartype
 import polars as pl
 
+from event_types import CARTS, CLICKS, ORDERS
+
 
 @beartype
 def ground_truth(events: pl.DataFrame):
@@ -10,15 +12,15 @@ def ground_truth(events: pl.DataFrame):
     events = (
         events.with_columns(
             click_labels = (
-                pl.when(pl.col('type')=='clicks').then(pl.col('aid')).otherwise(None).shift(-1)
+                pl.when(pl.col('type')==CLICKS).then(pl.col('aid')).otherwise(None).shift(-1)
                 .reverse().cumulative_eval(pl.element().implode().list.drop_nulls().list.first()).reverse().over('session',)
             ),
             cart_labels = (
-                pl.when(pl.col('type')=='carts').then(pl.col('aid')).otherwise(None).shift(-1)
+                pl.when(pl.col('type')==CARTS).then(pl.col('aid')).otherwise(None).shift(-1)
                 .reverse().cumulative_eval(pl.element().implode().list.drop_nulls()).reverse().over('session',)
             ),
             order_labels = (
-                pl.when(pl.col('type')=='orders').then(pl.col('aid')).otherwise(None).shift(-1)
+                pl.when(pl.col('type')==ORDERS).then(pl.col('aid')).otherwise(None).shift(-1)
                 .reverse().cumulative_eval(pl.element().implode().list.drop_nulls()).reverse().over('session',)
             )
         # .with_columns(
@@ -41,7 +43,7 @@ def test_gt():
     events = pl.DataFrame(
         {
             'session': [0,0,0, 1,1,1],
-            'type': ['clicks', 'carts', 'carts', 'orders','clicks','orders'],
+            'type': [CLICKS, CARTS, CARTS, ORDERS, CLICKS, ORDERS],
             'aid': [1,2,3, 4,5,6],}
     )
 

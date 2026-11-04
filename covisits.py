@@ -2,10 +2,18 @@ import datetime
 from pathlib import Path
 import polars as pl
 from loguru import logger
+from typing import TYPE_CHECKING, Callable, TypeVar
+
+from event_types import CARTS, CLICKS, ORDERS
+
+if TYPE_CHECKING:
+    from polars._typing import EngineType
 
 
 aid_diff_filter = pl.col("aid")!=pl.col("aid_y")
-within_14_days_filter = ((pl.col("ts")-pl.col("ts_y")).abs()) <= pl.duration(days=14)
+# note: avoid .abs() on Duration columns - unsupported by the cudf GPU engine
+ts_diff = pl.col("ts") - pl.col("ts_y")
+within_14_days_filter = ts_diff.is_between(-pl.duration(days=14), pl.duration(days=14))
 start_train = datetime.datetime.fromisoformat('2022-07-31 22:00:00') 
 end_train = datetime.datetime.fromisoformat('2022-08-28 21:59:59')
 end_test = datetime.datetime.fromisoformat('2022-09-04 21:59:51') 
@@ -16,18 +24,21 @@ last_28_days_filter = (pl.col('ts')> end_test -pl.duration(days=28))
             # 1662328791 '2022-09-04 21:59:51'
 
 
-carts_orders_filter = pl.col("type").is_in(["carts","orders"])
-within_1_day_filter = ((pl.col("ts")-pl.col("ts_y")).abs()) <= pl.duration(days=1)
-hour_diff = (pl.col('ts')-pl.col('ts_y')).abs()/pl.duration(hours=1)
+carts_orders_filter = pl.col("type").is_in([CARTS, ORDERS])
+within_1_day_filter = ts_diff.is_between(-pl.duration(days=1), pl.duration(days=1))
+# not ts_diff / pl.duration(hours=1): the GPU engine can't divide durations
+hour_diff = (ts_diff.dt.total_seconds(fractional=True) / 3600).abs()
 weight_93_ts = 1 + 3*(pl.col('ts') - start_train)/(end_test-start_train)
 
-def session_self_join(events: pl.DataFrame):
-    return events.join(events,on="session",suffix="_y")
+Frame = TypeVar("Frame", pl.DataFrame, pl.LazyFrame)
 
-def take_tail_30(events: pl.DataFrame):
-    tail_30 = events.group_by("session").tail(30)
-    logger.info(f'tail_30 {tail_30.height:,} of {events.height:,}')
-    return tail_30
+# output order of covisitation matrices: aid, value descending, aid_y (tie-break)
+TOP_ORDER = ["aid", "value", "aid_y"]
+TOP_DESCENDING = [False, True, False]
+
+
+def session_self_join(events: Frame) -> Frame:
+    return events.join(events, on="session", suffix="_y")
 
 def filter(events: pl.DataFrame, filter):
     pre = events.height
@@ -53,90 +64,165 @@ def update_df_agg(df, df_agg):
         df_agg = pl.concat((df_agg,df)).group_by(["aid", "aid_y"]).agg(pl.col('value').sum())
     return df_agg
 
-def make_covisits_90(events: pl.DataFrame):
-    session_chunk = 1_00_000
-    logger.info(f'session_chunk {session_chunk:,}')
-    events =  filter(events,carts_orders_filter)
-    
-    df_agg = None
-    for i_gp,gp, df in iterate_sessions(events, session_chunk):
-        df = (
-            filter(session_self_join(df),
-                   within_14_days_filter & aid_diff_filter)
-            .unique(subset = ["session","aid", "aid_y"]) # 1 pair per session
-            .group_by(["aid", "aid_y"]).agg(pl.len().alias("value"))
+def iterate_session_chunks(events: pl.LazyFrame, session_chunk: int):
+    """Yield (chunk_start, lazy chunk) for contiguous session ranges.
+
+    `events` should be sorted by session so each range filter is cheap
+    (and a parquet scan can skip row groups using statistics).
+    """
+    lo, hi = (
+        events.select(pl.col("session").min().alias("lo"), pl.col("session").max().alias("hi"))
+        .collect()
+        .row(0)
+    )
+    first = (lo // session_chunk) * session_chunk
+    n_chunks = (hi - first) // session_chunk + 1
+    logger.info(f"sessions {lo:,}..{hi:,} in {n_chunks} chunks of {session_chunk:,}")
+    for i, start in enumerate(range(first, hi + 1, session_chunk)):
+        logger.info(f"chunk {i + 1}/{n_chunks} start {start:,}")
+        yield start, events.filter(
+            pl.col("session").is_between(start, start + session_chunk, closed="left")
         )
-        df_agg = update_df_agg(df, df_agg)
-    covisits_cpu_90 = (
-        df_agg
-        .sort(['aid','value'], descending=(False, True))
-    )
-    return covisits_cpu_90
 
 
-def top_covisit(df: pl.DataFrame, top: int = 40):
-    """For each aid keep the `top` aid_y with the highest `value`."""
-    return df.select(
-        pl.col("aid", "aid_y", "value")
-        .top_k_by("value", k=top)
-        .over("aid", mapping_strategy="explode")
+def covisits_90_pairs(events: pl.LazyFrame) -> pl.LazyFrame:
+    """Per (aid, aid_y): number of sessions where both were carted/ordered within 14 days."""
+    events = events.filter(carts_orders_filter)
+    return (
+        session_self_join(events)
+        .filter(within_14_days_filter & aid_diff_filter)
+        .unique(subset=["session", "aid", "aid_y"])  # 1 pair per session
+        .group_by(["aid", "aid_y"])
+        .agg(pl.len().alias("value"))
     )
 
-def make_covisits_95():
 
-    session_chunk = 100_000
-    logger.info(f'session_chunk {session_chunk:,}')
-    events =  (
-        pl.read_parquet("data/train.parquet")
-        .set_sorted('session').pipe(take_tail_30)
+def build_covisits(
+    events: pl.LazyFrame | pl.DataFrame,
+    pairs: Callable[[pl.LazyFrame], pl.LazyFrame],
+    session_chunk: int | None,
+    engine: "EngineType",
+    top: int,
+    agg_engine: "EngineType" = "streaming",
+) -> pl.DataFrame:
+    """Run `pairs` (session events -> aid, aid_y, value) per session chunk, sum the chunks,
+    and keep the `top` aid_y per aid.
+
+    events: LazyFrame (e.g. pl.scan_parquet) sorted by session.
+    session_chunk: sessions per chunk; None runs one query over all sessions.
+    engine: engine for the per-chunk pair queries - "gpu", "streaming" or "in-memory".
+        "gpu" falls back to CPU (with a warning) if the GPU engine is unavailable;
+        pass pl.GPUEngine(raise_on_fail=True) to error instead.
+    top: keep the top aid_y for each aid by value (0 returns all pairs).
+    agg_engine: engine for summing the chunks and taking the top. Defaults to CPU
+        streaming: the chunk results are already in host RAM, and on the full 90 matrix
+        (117M pairs) this step ran out of memory on a 4GB GPU, while streaming takes ~1.5s.
+    Returns aid, aid_y, value sorted by aid, value descending, aid_y.
+    """
+    events = events.lazy()
+    if session_chunk is None:
+        chunks = [pairs(events).collect(engine=engine)]
+    else:
+        chunks = [
+            pairs(chunk).collect(engine=engine)
+            for _, chunk in iterate_session_chunks(events, session_chunk)
+        ]
+    logger.info("aggregating chunks")
+    result = (
+        pl.concat(chunks)
+        .lazy()
+        .group_by(["aid", "aid_y"])
+        .agg(pl.col("value").sum())
     )
-    df_agg = None
-    dfs = {}
-    for i_gp,gp, df in iterate_sessions(events, session_chunk):
-        df = (
-            filter(session_self_join(df), aid_diff_filter)
-            .unique(subset = ["session","aid", "aid_y"]) # 1 pair per session (?random time then if duplicate)
-            .group_by(["aid", "aid_y"]).agg(
-                ((1/2)**(hour_diff)*pl.when(pl.col('type')=='clicks').then(1).otherwise(4)).alias('value').sum()
-            )
-        )
-        dfs[gp] = df
-    return pl.concat(dfs.values())
+    if top:
+        result = top_covisit(result, top)
+    else:
+        result = result.sort(TOP_ORDER, descending=TOP_DESCENDING)
+    return result.collect(engine=agg_engine)
 
-def make_covisits_95_gpu():
 
-    session_chunk = 100_000
-    logger.info(f'session_chunk {session_chunk:,}')
-    events =  (
-        pl.read_parquet("data/train.parquet")
-        .set_sorted('session').pipe(take_tail_30)
+def make_covisits_90(
+    events: pl.LazyFrame | pl.DataFrame,
+    session_chunk: int | None = None,
+    engine: "EngineType" = "gpu",
+    top: int = 40,
+) -> pl.DataFrame:
+    """Carts/orders covisitation counts (reference: train/covisit_matrices/cpu-90.ipynb).
+
+    See build_covisits for the arguments.
+
+    Timings on full train.parquet (RTX 2050 4GB, 2026-11-04, before `top` was added):
+    gpu + no chunking 21.4s (fastest); streaming best at ~500k sessions/chunk 26.3s.
+    """
+    return build_covisits(events, covisits_90_pairs, session_chunk, engine, top)
+
+
+def top_covisit(df: Frame, top: int = 40) -> Frame:
+    """For each aid keep the `top` aid_y with the highest `value` (ties: lowest aid_y).
+
+    Output is sorted by aid, value descending, aid_y. Sort + group_by.head is ~10x faster
+    on CPU than a rank(...).over("aid") filter (1.4s vs 13s on the 117M-row 90 matrix);
+    the window version also ran out of GPU memory on a 4GB card.
+    """
+    return (
+        df.sort(TOP_ORDER, descending=TOP_DESCENDING)
+        .group_by("aid", maintain_order=True)
+        .head(top)
     )
-    df_agg = None
-    dfs = {}
-    for i_gp,gp, df in iterate_sessions(events, session_chunk):
-        df = df.lazy()
-        df = (
-            session_self_join(df).filter(aid_diff_filter)
-            .unique(subset = ["session","aid", "aid_y"]) # 1 pair per session (?random time then if duplicate)
-            .group_by(["aid", "aid_y"]).agg(
-                ((1/2)**(hour_diff)*pl.when(pl.col('type')=='clicks').then(1).otherwise(4)).alias('value').sum()
-            )
-        ).collect(engine='gpu')
-        dfs[gp] = df
-    return pl.concat(dfs.values())
+
+def last_n_first_per_aid(events: pl.LazyFrame, n: int = 30) -> pl.LazyFrame:
+    """Keep each session's last `n` events, then each aid's first event among them.
+
+    Relies on row order (sessions sorted, events in time order within a session).
+    Self-joining the result reproduces the reference's pandas
+    `groupby('session').tail(30)` -> merge -> `drop_duplicates(['session','aid_x','aid_y'])`
+    (keep first): the first (aid_x, aid_y) row is aid_x's first event paired with aid_y's
+    first event. Deduplicating before the join is also deterministic, unlike
+    `.unique()` after it.
+
+    Written with a row index and min/max windows because the GPU engine doesn't
+    support int_range/cum_count in windows. `k + n > max` avoids UInt32 underflow.
+    """
+    k = pl.col("_k")
+    return (
+        events.with_row_index("_k")
+        .filter(k + n > k.max().over("session"))
+        .filter(k == k.min().over("session", "aid"))
+        .drop("_k")
+    )
 
 
-def aggregate_covisits_95():
-    for i in range(19):
-        print(i)
-        (
-            pl.scan_parquet('data/out/covisits_95_unagg.parquet')
-            .filter(pl.col('aid')//1_00_000 == i)
-            .group_by(["aid", "aid_y"])
-            .agg(pl.col('value').sum())
-            .sort(['aid','value'],descending = [False, True])
-            .sink_parquet((f'data/out/covisits_95/aid_{i:02d}00000.parquet'))
-        )
+# time decay with half-life 1 hour; carts/orders as the *second* event count 4x clicks
+weight_95 = (1 / 2) ** hour_diff * pl.when(pl.col("type_y") == CLICKS).then(1).otherwise(4)
+
+
+def covisits_95_pairs(events: pl.LazyFrame) -> pl.LazyFrame:
+    """Per (aid, aid_y): time-decayed, type-weighted covisits within each session's last 30 events."""
+    events = last_n_first_per_aid(events, 30)
+    return (
+        session_self_join(events)
+        .filter(aid_diff_filter)
+        .group_by(["aid", "aid_y"])
+        .agg(weight_95.sum().alias("value"))
+    )
+
+
+def make_covisits_95(
+    events: pl.LazyFrame | pl.DataFrame,
+    session_chunk: int | None = None,
+    engine: "EngineType" = "gpu",
+    top: int = 40,
+) -> pl.DataFrame:
+    """Clicks covisitation, time decay + type weight (reference: train/covisit_matrices/cpu-95.ipynb).
+
+    Differs from the reference in one way: the reference splits each data file into
+    120 row chunks before taking tail(30), so a session spanning two chunks is
+    treated as two sessions. Here sessions are never split.
+
+    See build_covisits for the arguments.
+    """
+    return build_covisits(events, covisits_95_pairs, session_chunk, engine, top)
+
 
 def aggregate_covisits(ver: int):
     Path(f'data/out/covisits_{ver}/agg/').mkdir(parents=True, exist_ok=True)
@@ -362,7 +448,7 @@ def make_covisits_166(train_events:pl.DataFrame, test_events: pl.DataFrame):
 # -    "    .filter(aid_diff_filter)\n",
 # -    "    .unique(subset = [\"session\",\"aid\", \"aid_y\"]) # 1 pair per session (?random time then if duplicate)\n",
 # -    "    .group_by([\"aid\", \"aid_y\"]).agg(\n",
-# -    "        ((1/2)**((pl.col('ts')-pl.col('ts_y'))/pl.duration(hours=1))*pl.when(pl.col('type')=='clicks').then(1).otherwise(4)).alias('weight').sum()\n",
+# -    "        ((1/2)**((pl.col('ts')-pl.col('ts_y'))/pl.duration(hours=1))*pl.when(pl.col('type')==CLICKS).then(1).otherwise(4)).alias('weight').sum()\n",
 # -    "    )\n",
 # -    ")"
 # -   ]
