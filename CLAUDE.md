@@ -24,7 +24,8 @@ When converting, read the matching reference notebook first. In `covisits.py`, f
 
 ## Layout
 
-- `covisits.py`: covisitation matrices. Shared filter and weight expressions are at the top.
+- `covisits.py`: covisitation matrices, one `make_covisits_<VER>` per notebook run by Chris's `train/covisit_matrices/script.ipynb`, all built through `build_covisits`. The module docstring explains the shared conventions, including which copy of a duplicate pair is kept.
+- `covisits_reference.py`: pandas ports of those notebooks, which the tests compare against.
 - `labels.py`, `testset.py`: ground-truth labels and the train/test split (being converted to Polars).
 - `event_types.py`: integer codes for the `type` column.
 - `test_*.py`: pytest tests.
@@ -66,14 +67,15 @@ Schema: `session` Int32, `aid` Int32, `ts` Datetime(ms), `type` UInt8. `test_ful
   - `.abs()` on a Duration. Use `diff.is_between(-d, d)`, or convert to a float first with `diff.dt.total_seconds(fractional=True) / 3600`.
   - Dividing a Duration by a Duration, e.g. `diff / pl.duration(hours=1)`. Use `dt.total_seconds()` as above.
   - `top_k_by(...).over(...)`, and `int_range` / `cum_count` inside `.over()`.
+  - Adding or subtracting a literal duration or datetime to a Datetime column, e.g. `pl.col("ts") + pl.duration(hours=2)` or `pl.col("ts") - some_datetime`. Comparing `ts` with a Python `datetime` works, as do `ts - ts_y` between two columns, `dt.hour()` and `dt.epoch("s")`.
 - **GPU memory:** `.over(...)` inside a filter can't be split into partitions, so cudf runs it on the whole frame at once. A `rank().over("aid")` filter on the 117M-row 90 matrix ran out of memory on the 4 GB GPU. For per-group top-k use `sort` + `group_by(..., maintain_order=True).head(k)` (see `top_covisit`).
 - `engine="gpu"` **quietly falls back to CPU** for unsupported queries. To confirm something really runs on the GPU, use `pl.GPUEngine(raise_on_fail=True)`.
 - Chunking by session: `iterate_session_chunks` filters a session-sorted LazyFrame into session ranges. On the local RTX 2050 the GPU is fastest with no chunking. For `make_covisits_90` it took 21s on GPU versus 26 to 32s on streaming, while small chunks made the GPU slower. That trend should hold or strengthen on an A100, but it hasn't been measured there. Benchmark the chunk size for each new matrix rather than copying the reference's chunking.
-- Older `make_covisits_*` functions still follow the earlier eager style, which loops over chunks, logs `.height` and uses `iterate_sessions`. `make_covisits_90` shows the target style.
 
 ## Testing
 
 - `uv run pytest`. When converting a function, add a small synthetic test with hand-checked expected output. Parametrize it over `engine` (`"streaming"`, `"in-memory"`, and GPU, skipped when unavailable; see `test_covisits.py`) and over chunk sizes, so chunked and unchunked runs must agree.
 - Synthetic test frames must use the same dtypes as the real data.
+- Covisitation matrices also get a comparison test against a pandas port of the reference notebook in `covisits_reference.py` (`test_matches_reference`), run on random sessions.
 - For full-data checks, compare GPU and streaming outputs with `polars.testing.assert_frame_equal` after sorting. Put benchmark scripts in the scratchpad, not the repo.
 - Known broken: `labels.py::test_gt` calls `ground_truth_pl`, which doesn't exist.

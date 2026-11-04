@@ -7,6 +7,8 @@ from polars.testing import assert_frame_equal
 import numpy as np
 import pandas as pd
 
+import covisits
+import covisits_reference as ref
 from covisits import make_covisits_90, make_covisits_95, top_covisit
 from event_types import CARTS, CLICKS, ORDERS
 
@@ -181,3 +183,271 @@ def test_top_covisit_keeps_top_k_per_aid():
         result.sort("aid", "value", descending=[False, True]),
         expected,
     )
+
+
+# ---------------------------------------------------------------------------
+# Matrices from the GPU notebooks and cpu-99: hand-checked cases
+# ---------------------------------------------------------------------------
+
+C, A, O = CLICKS, CARTS, ORDERS
+T0 = datetime.datetime(2022, 8, 30)  # inside the 21/28-day windows; 02:00 UTC+2
+OLD = datetime.datetime(2022, 8, 1)  # before them
+
+
+def h(hours):
+    return T0 + datetime.timedelta(hours=hours)
+
+
+def _frame(rows):
+    """rows: (session, aid, ts, type), already sorted by session then ts."""
+    return pl.LazyFrame(rows, schema=EVENT_SCHEMA, orient="row")
+
+
+def _f93(seconds):
+    """93's time weight for an x event `seconds` after start_train."""
+    return 1 + 3 * seconds / (covisits.END_TEST_S - covisits.START_TRAIN_S)
+
+
+S = covisits.start_train
+HOUR = datetime.timedelta(hours=1)
+
+# name -> (make function, list of event-row lists (1 frame, or train + test), extra kwargs,
+#          expected {(aid, aid_y): value})
+HAND_CASES = {
+    "93": (
+        covisits.make_covisits_93,
+        [[(0, 1, S, C), (0, 2, S + HOUR, C), (0, 1, S + 2 * HOUR, C), (0, 3, S + 30 * HOUR, C)]],
+        {},
+        # (1,2): latest copy of 1 (at 2h) with 2, 1h apart; aid 3 is > 24h from both
+        {(1, 2): _f93(7200) * 0.5, (2, 1): _f93(3600) * 0.5},
+    ),
+    "99": (
+        covisits.make_covisits_99,
+        [[(0, 4, OLD, A), (0, 1, h(0), A), (0, 2, h(1), O), (0, 3, h(2), C), (0, 1, h(3), A)]],
+        {},
+        # earliest copies: 1@0h, 2@1h; 4 too old, 3 a click
+        {(1, 2): 0.5, (2, 1): 0.5},
+    ),
+    "115": (
+        covisits.make_covisits_115,
+        [[(0, 5, OLD, C), (0, 1, h(0), C), (0, 2, h(1), A), (0, 1, h(2), C)]],
+        {},
+        # latest copies 1@2h, 2@1h; self pairs kept; 5 too old
+        {(1, 1): 1.0, (1, 2): 0.5, (2, 1): 0.5, (2, 2): 1.0},
+    ),
+    "116": (
+        covisits.make_covisits_116,
+        [[(0, 1, h(0), C), (0, 2, h(1), A), (0, 1, h(2), C), (0, 2, h(4), O)]],
+        {},
+        # y after x; latest x copy: (1@2h, 2@4h order) 2h; click y weight 0
+        {(1, 1): 0.0, (1, 2): 0.25, (2, 1): 0.0, (2, 2): 0.125},
+    ),
+    "155": (
+        covisits.make_covisits_155,
+        [[(0, 1, h(0), C), (0, 2, h(6), A), (0, 1, h(12), C), (0, 2, h(18), O)]],
+        {},
+        # y a later cart/order, latest x copy, 6h half-life: (1@12, 2@18), (2@6, 2@18)
+        {(1, 2): 0.5, (2, 2): 0.25},
+    ),
+    "157": (
+        covisits.make_covisits_157,
+        [[(0, 1, h(0), C), (0, 2, h(6), A), (0, 1, h(12), C)]],
+        {},
+        # latest copies 1@12h, 2@6h, 6h half-life, self pairs kept
+        {(1, 1): 1.0, (1, 2): 0.5, (2, 1): 0.5, (2, 2): 1.0},
+    ),
+    "165": (
+        covisits.make_covisits_165,
+        [
+            [(0, 1, h(0), C), (0, 2, h(1), A)] + [(1, 8, h(i), A) for i in range(7)],
+            [(2, 3, h(0), C), (2, 4, h(1), A), (2, 3, h(2), C), (2, 4, h(3), A), (3, 5, h(0), C), (3, 6, h(2), O)],
+        ],
+        {},
+        # train session 0 (2 events <= 6) and test session 3 (2 <= 3); 1 (7) and 2 (4) too long
+        {(1, 2): 0.5, (2, 2): 1.0, (5, 6): 0.25, (6, 6): 1.0},
+    ),
+    "166": (
+        covisits.make_covisits_166,
+        [
+            [(0, 1, h(0), C), (0, 2, h(1), A)] + [(1, 8, h(i), A) for i in range(7)],
+            [(2, 3, h(0), C), (2, 4, h(1), A), (2, 3, h(2), C), (2, 4, h(3), A), (3, 5, h(0), C), (3, 6, h(2), O)],
+        ],
+        {},
+        # train session 1 (7 > 6) and test session 2 (4 > 3), latest copies
+        {(8, 8): 1.0, (3, 4): 0.5, (4, 4): 1.0},
+    ),
+    "167": (
+        covisits.make_covisits_167,
+        [[(0, 1, h(0), C), (0, 2, h(1), A), (0, 3, h(12), C), (0, 4, h(13), O)]],
+        {},
+        # x before 14:00 UTC+2 (h(0) is 02:00, h(12) is 14:00); y carts/orders
+        {(1, 2): 0.5, (1, 4): 0.5**13, (2, 2): 1.0, (2, 4): 0.5**12},
+    ),
+    "168": (
+        covisits.make_covisits_168,
+        [[(0, 1, h(0), C), (0, 2, h(1), A), (0, 3, h(12), C), (0, 4, h(13), O)]],
+        {},
+        {(3, 2): 0.5**11, (3, 4): 0.5, (4, 2): 0.5**12, (4, 4): 1.0},
+    ),
+    "217": (
+        covisits.make_covisits_217,
+        [[(0, 1, h(0), C), (0, 2, h(1), C), (0, 1, h(2), C), (0, 3, h(3), C), (1, 1, h(0), C), (1, 2, h(1), C)]],
+        {},
+        # y is aid_y's first event: 3@3 is next to 1@2, but 1's first event is @0 -> no (3, 1)
+        {(1, 2): 2, (2, 1): 2, (1, 3): 1},
+    ),
+    "220": (
+        covisits.make_covisits_220,
+        [[(0, 1, h(0), C), (0, 2, h(1), C), (0, 1, h(2), C), (0, 3, h(3), C), (1, 1, h(0), C), (1, 2, h(1), C)]],
+        {},
+        {(1, 2): 2, (2, 1): 2, (1, 3): 1, (2, 3): 1, (3, 2): 1},
+    ),
+    "226": (
+        covisits.make_covisits_226,
+        [[(0, 1, h(0), A), (0, 9, h(1), C), (0, 2, h(2), A), (0, 3, h(3), O), (0, 1, h(4), A), (0, 4, h(5), O), (0, 5, h(6), A)]],
+        {},
+        # carts/orders only, positions 1,2,3,1,4,5; aid_y's first one 1-3 positions later
+        {p: 1 for p in [(1, 2), (1, 3), (1, 4), (1, 5), (2, 3), (2, 4), (3, 4), (3, 5), (4, 5)]},
+    ),
+    "232": (
+        covisits.make_covisits_232,
+        [[(0, 1, h(0), C)] + [(0, 2, h(i), C) for i in range(1, 6)] + [(0, 3, h(6), C)]],
+        {},
+        # (2, 3): x copies of 2 within 3 of 3@6 are @3,@4,@5; the earliest (@3) is kept: 3h
+        {(1, 2): 0.5, (2, 1): 0.5, (2, 3): 0.5**3},
+    ),
+    "235": (
+        covisits.make_covisits_235,
+        [[(0, 1, h(0), C)] + [(0, 2, h(i), C) for i in range(1, 6)] + [(0, 3, h(6), C)]],
+        {},
+        {(1, 2): 0.5, (1, 3): 0.5**6, (2, 1): 0.5, (2, 3): 0.5**5, (3, 1): 0.5**6, (3, 2): 0.5**5},
+    ),
+    "239": (
+        covisits.make_covisits_239,
+        [
+            [(0, 1, h(0), C), (0, 2, h(1), A), (0, 3, h(2), O), (1, 1, h(0), C), (1, 2, h(1.5), A)],
+            [(2, 1, h(0), C), (2, 2, h(1), A)],
+        ],
+        {"train_parts": 1, "test_parts": 1},
+        # train sessions 0, 1 are one file: (1, 2) keeps the closest (1h, not 1.5h); + test file 1h.
+        # (1, 3) is 2h apart: not < 2h
+        {(1, 2): 1.0, (2, 3): 0.5},
+    ),
+    "700": (
+        covisits.make_covisits_700,
+        [
+            [(0, 1, h(0), C), (0, 2, h(1), A), (0, 2, h(2), O), (0, 2, h(3), A), (0, 1, h(4), O), (0, 3, h(5), C)]
+            + [(1, 1, OLD, C), (1, 2, h(1), A)]
+            + [(2, 1, h(0), C), (2, 2, h(1), A)]
+        ],
+        {},
+        # session 0: 2 carted and ordered -> 2; session 1 started too early; session 2 -> 1
+        {(1, 2): 3},
+    ),
+    "701": (
+        covisits.make_covisits_701,
+        [[(0, 1, h(0), C), (0, 2, h(1), C), (0, 2, h(2), A), (0, 2, h(3), C), (0, 1, h(4), C), (1, 1, OLD, C), (1, 2, h(1), A)]],
+        {},
+        # earliest click of 2 (1h) + earliest cart of 2 (2h); session 1 started too early
+        {(1, 2): 0.5 + 0.25},
+    ),
+}
+
+
+def _expected(pairs):
+    return pl.DataFrame(
+        [(a, b, float(v)) for (a, b), v in sorted(pairs.items())],
+        schema={"aid": pl.Int32, "aid_y": pl.Int32, "value": pl.Float64},
+        orient="row",
+    )
+
+
+@pytest.mark.parametrize("session_chunk", [None, 1])
+@pytest.mark.parametrize("engine", ENGINES)
+@pytest.mark.parametrize("name", HAND_CASES)
+def test_hand_checked(name, engine, session_chunk):
+    make, frames, kwargs, expected = HAND_CASES[name]
+    result = make(
+        *[_frame(rows) for rows in frames],
+        session_chunk=session_chunk, engine=_engine(engine), top=0, **kwargs,
+    )
+    assert_frame_equal(
+        result.sort("aid", "aid_y"), _expected(expected), check_dtypes=False, rel_tol=1e-9
+    )
+
+
+# ---------------------------------------------------------------------------
+# Same matrices against pandas ports of the notebooks, on random data
+# ---------------------------------------------------------------------------
+
+
+def _random_sessions(n_sessions, first_session, seed):
+    """Sessions starting anywhere from start_train to end_test - 1 day (so the 21/28-day
+    windows cut some), 1-8 or 1-60 events over few aids, strictly increasing whole-second
+    timestamps (so the reference's sorts have no ties)."""
+    rng = np.random.default_rng(seed)
+    lengths = np.where(rng.random(n_sessions) < 0.5, rng.integers(1, 9, n_sessions), rng.integers(1, 61, n_sessions))
+    span = int((covisits.end_test - covisits.start_train).total_seconds()) - 86400
+    starts = covisits.START_TRAIN_S + rng.integers(0, span, n_sessions)
+    gaps = rng.integers(1, 3 * 3600, lengths.sum())  # seconds
+    session = np.repeat(np.arange(n_sessions), lengths)
+    first = np.r_[0, np.cumsum(lengths)[:-1]]
+    gaps[first] = 0
+    within = np.cumsum(gaps) - np.repeat(np.cumsum(gaps)[first], lengths)
+    ts_s = np.repeat(starts, lengths) + within
+    n = lengths.sum()
+    return pl.DataFrame(
+        {
+            "session": session + first_session,
+            "aid": rng.integers(0, 25, n),
+            "ts": (ts_s * 1000).astype("datetime64[ms]"),
+            "type": rng.choice([C, A, O], n, p=[0.7, 0.2, 0.1]),
+        },
+        schema=EVENT_SCHEMA,
+    )
+
+
+TRAIN = _random_sessions(300, 0, seed=1)
+TEST = _random_sessions(100, 300, seed=2)
+ALL = pl.concat([TRAIN, TEST])
+
+# name -> (make function, reference port, takes train + test separately)
+REFERENCE_CASES = {
+    "93": (covisits.make_covisits_93, ref.ref_93, False),
+    "99": (covisits.make_covisits_99, ref.ref_99, False),
+    "115": (covisits.make_covisits_115, ref.ref_115, False),
+    "116": (covisits.make_covisits_116, ref.ref_116, False),
+    "155": (covisits.make_covisits_155, ref.ref_155, "test"),
+    "157": (covisits.make_covisits_157, ref.ref_157, "test"),
+    "165": (covisits.make_covisits_165, ref.ref_165, True),
+    "166": (covisits.make_covisits_166, ref.ref_166, True),
+    "167": (covisits.make_covisits_167, ref.ref_167, False),
+    "168": (covisits.make_covisits_168, ref.ref_168, False),
+    "217": (covisits.make_covisits_217, ref.ref_217, False),
+    "220": (covisits.make_covisits_220, ref.ref_220, False),
+    "226": (covisits.make_covisits_226, ref.ref_226, False),
+    "232": (covisits.make_covisits_232, ref.ref_232, False),
+    "235": (covisits.make_covisits_235, ref.ref_235, False),
+    "239": (covisits.make_covisits_239, ref.ref_239, True),
+    "700": (covisits.make_covisits_700, ref.ref_700, False),
+    "701": (covisits.make_covisits_701, ref.ref_701, False),
+}
+
+
+@pytest.mark.parametrize("session_chunk", [None, 50])
+@pytest.mark.parametrize("engine", ENGINES)
+@pytest.mark.parametrize("name", REFERENCE_CASES)
+def test_matches_reference(name, engine, session_chunk):
+    make, port, split = REFERENCE_CASES[name]
+    if split is True:
+        frames = [TRAIN, TEST]
+    elif split == "test":
+        frames = [TEST]
+    else:
+        frames = [ALL]
+    expected = port(*[ref.to_reference_frame(f) for f in frames]).sort("aid", "aid_y")
+    assert expected.height > 0
+    result = make(
+        *[f.lazy() for f in frames], session_chunk=session_chunk, engine=_engine(engine), top=0
+    ).sort("aid", "aid_y")
+    assert_frame_equal(result, expected, check_dtypes=False, rel_tol=1e-9)
