@@ -1,50 +1,54 @@
 import argparse
-import random
-from copy import deepcopy
-from pathlib import Path
-import datetime
 
+import datetime
+from pathlib import Path
+import numpy as np
 import polars as pl
 import polars.selectors as cs
 from beartype import beartype
-from tqdm.auto import tqdm
 from labels import ground_truth
 
 
 @beartype
-def split_events(events: pl.DataFrame):
+def split_events(events: pl.DataFrame)->tuple[pl.DataFrame, pl.DataFrame]:
     # accumulate backwards all the labels at each event
-    test_events = ground_truth(events)
-    split_idx = random.randint(1, len(test_events))
-    test_events = test_events[:split_idx]
-    labels = test_events.pipe(get_last_labels)
-    test_events = test_events.drop(cs.ends_with('_labels'))
+    events = ground_truth(events)
+    events = truncate_events(events)    
+    labels = events.pipe(get_last_labels)
+    events = events.drop(cs.ends_with('_labels'))
     
-    return test_events, labels
+    return events, labels
+
+def truncate_events(events) -> pl.DataFrame: 
+    rng = np.random.default_rng()
+    session_lengths = (
+        events.group_by('session').len()
+        .with_columns(split=pl.col('len').map_batches(lambda x: rng.integers(1,x), return_dtype=pl.Int64))
+    )
+    events = events.join(session_lengths.select(['session','split']), on='session',maintain_order='left' )
+    events = events.filter(pl.int_range(pl.len()).over('session')<pl.col('split')).drop('split')
+    return events
 
 
 def get_last_labels(events: pl.DataFrame):
-    labels = events.select('session',cs.ends_with('_labels')).row(-1,named=True)#.to_dict(as_series=False)
+    labels = events.select('session',cs.ends_with('_labels')).group_by('session').tail(1)
     return labels
 
-@beartype
-def create_kaggle_testset(sessions: pl.DataFrame, sessions_output: Path, labels_output: Path):
-    last_labels = []
-    splitted_sessions = []
+# @beartype
+# def create_kaggle_testset(events: pl.DataFrame):
+    
+#         session = session.to_dict()
+#         splitted_events, labels = split_events(session['events'])
+#         last_labels.append({'session': session['session'], 'labels': labels})
+#         splitted_sessions.append({'session': session['session'], 'events': splitted_events})
 
-    for _, session in tqdm(sessions.iterrows(), desc="Creating trimmed testset", total=len(sessions)):
-        session = session.to_dict()
-        splitted_events, labels = split_events(session['events'])
-        last_labels.append({'session': session['session'], 'labels': labels})
-        splitted_sessions.append({'session': session['session'], 'events': splitted_events})
+#     with open(sessions_output, 'w') as f:
+#         for session in splitted_sessions:
+#             f.write(json.dumps(session) + '\n')
 
-    with open(sessions_output, 'w') as f:
-        for session in splitted_sessions:
-            f.write(json.dumps(session) + '\n')
-
-    with open(labels_output, 'w') as f:
-        for label in last_labels:
-            f.write(json.dumps(label, cls=setEncoder) + '\n')
+#     with open(labels_output, 'w') as f:
+#         for label in last_labels:
+#             f.write(json.dumps(label, cls=setEncoder) + '\n')
 
 
 #@beartype
@@ -56,7 +60,6 @@ def trim_events(events:pl.DataFrame, max_ts: datetime.datetime) -> pl.DataFrame:
 @beartype
 def get_max_ts(df: pl.DataFrame) -> datetime.datetime:
     max_ts = df.get_column('ts').max()
-    #print(f'max_ts = {max_ts}')
     return max_ts
 
 
@@ -94,7 +97,7 @@ def train_test_split(events: pl.DataFrame, max_ts: datetime.datetime, test_days:
 
 @beartype
 def main(train_set: Path, output_path: Path, days: int, seed: int):
-    random.seed(seed)
+    # random.seed(seed)
     max_ts = get_max_ts(train_set)
 
     events = pl.read_parquet(train_set)
@@ -109,7 +112,7 @@ def main(train_set: Path, output_path: Path, days: int, seed: int):
     test_sessions = pl.read_parquet(test_file_full)
     test_sessions_file = output_path / 'test_sessions.parquet'
     test_labels_file = output_path / 'test_labels.parquet'
-    create_kaggle_testset(test_sessions, test_sessions_file, test_labels_file)
+    # create_kaggle_testset(test_sessions, test_sessions_file, test_labels_file)
 
 
 if __name__ == '__main__':

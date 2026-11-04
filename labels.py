@@ -2,32 +2,9 @@
 from beartype import beartype
 import polars as pl
 
-@beartype
-def ground_truth(events: list[dict]):
-    prev_labels = {"clicks": None, "carts": set(), "orders": set()}
-
-    for event in reversed(events):
-        event["labels"] = {}
-
-        for label in ['clicks', 'carts', 'orders']:
-            if prev_labels[label]:
-                if label != 'clicks':
-                    event["labels"][label] = prev_labels[label].copy()
-                else:
-                    event["labels"][label] = prev_labels[label]
-
-        if event["type"] == "clicks":
-            prev_labels['clicks'] = event["aid"]
-        if event["type"] == "carts":
-            prev_labels['carts'].add(event["aid"])
-        elif event["type"] == "orders":
-            prev_labels['orders'].add(event["aid"])
-
-    return events[:-1]
-
 
 @beartype
-def ground_truth_pl(events: pl.DataFrame):
+def ground_truth(events: pl.DataFrame):
     # clicks using as of join
     # click label is aid of first click after
     events = (
