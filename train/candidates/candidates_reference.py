@@ -435,3 +435,443 @@ def suggest_orders_564(df, M, INFER=ALL_564, branch="auto", ITEM_CT=50, top_orde
     result = unique_aids + sorted_aids[: ITEM_CT - len(unique_aids)]
     scores = [-1] * len(unique_aids) + scores[: ITEM_CT - len(unique_aids)]
     return _out(result, scores, top_orders, ITEM_CT)
+
+
+# ---------------------------------------------------------------------------
+# model-620: suggest_aids on the make-valid-lists rows (clicks only)
+# ---------------------------------------------------------------------------
+
+
+def suggest_aids_620(df, M, ITEM_CT2=50, top_clicks=()):
+    """model-620 `suggest_aids`. `df` is a make-valid-lists row
+    [session, aids, types, ts, d, a, b] (see `valid_lists`). Returns (session, aids)."""
+    top_clicks = list(top_clicks)
+    top_20, top_20b, top_20c = M["top20"], M["top20b"], M["top20c"]
+    top_20e, top_20f, top_20_test2 = M["top20e"], M["top20f"], M["top20test2"]
+    top_20_new2 = M["top20new2"]
+
+    session = df[0]
+    aids = df[1]
+    types = df[2]
+    ds = df[4]
+    ds2 = df[6]
+
+    unique_aids = list(dict.fromkeys(aids[::-1]))
+    unique_aids3 = list(dict.fromkeys([f for i, f in enumerate(aids) if ds2[i] == 1][::-1]))
+    mx = np.max(ds)
+    unique_aids4 = list(dict.fromkeys([f for i, f in enumerate(aids) if ds[i] == mx][::-1]))
+    unique_buys = list(dict.fromkeys([f for i, f in enumerate(aids) if types[i] in [1, 2]][::-1]))  # noqa: F841
+
+    ln = len(unique_aids)
+
+    if len(unique_aids) >= 15:
+        weights = np.logspace(0.1, 1, len(aids), base=2, endpoint=True) - 1
+        aids_temp = Counter()
+        for aid, w, t in zip(aids, weights, types):
+            aids_temp[aid] += w * type_weight_multipliers[t]
+        aids3 = list(itertools.chain(*[top_20c[aid][:20] for aid in unique_aids[:2] if aid in top_20c]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.6
+        aids3 = list(itertools.chain(*[top_20b[aid][:15] for aid in unique_aids3 if aid in top_20b]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.3
+        aids3 = list(itertools.chain(*[top_20_test2[aid][:20] for aid in unique_aids[:2] if aid in top_20_test2]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.6
+
+        result = [k for k, v in aids_temp.most_common(ITEM_CT2) if k not in unique_aids]
+        return session, (result + top_clicks[: ITEM_CT2 - len(result)])[:ITEM_CT2]
+
+    aids_temp = Counter()
+
+    weights3 = [2, 2] + [1] * 28
+    if len(unique_aids) == 1:
+        aids5 = list(itertools.chain(*[top_20_new2[aid][:30] for aid in unique_aids[-1:] if aid in top_20_new2]))
+        w5 = weights3 * int(len(aids5) // 30)
+        for aid, w in zip(aids5, w5):
+            aids_temp[aid] += w
+
+    aids2 = list(itertools.chain(*[top_20[aid][:20] for aid in unique_aids if aid in top_20]))
+    for i, aid in enumerate(aids2):
+        m = 0.1 + 0.9 * (ln - (i // (20))) / ln
+        aids_temp[aid] += m
+        if i % (20) == 0:
+            aids_temp[aid] += m
+
+    aids3 = list(itertools.chain(*[top_20b[aid][:20] for aid in unique_aids[:2] if aid in top_20b]))
+    for i, aid in enumerate(aids3):
+        aids_temp[aid] += 1
+        if i % (20) == 0:
+            aids_temp[aid] += 1
+
+    aids3 = list(itertools.chain(*[top_20_test2[aid][:20] for aid in unique_aids[:2] if aid in top_20_test2]))
+    for i, aid in enumerate(aids3):
+        aids_temp[aid] += 1
+        if i % (20) == 0:
+            aids_temp[aid] += 1
+
+    aids4 = list(itertools.chain(*[top_20f[aid][:10] for aid in unique_aids4 if aid in top_20f]))
+    for i, aid in enumerate(aids4):
+        w = i // (10)
+        aids_temp[aid] += 1 - w * 0.1
+        if i % (10) == 0:
+            aids_temp[aid] += 1 - w * 0.1
+
+    aids5 = list(itertools.chain(*[top_20e[aid][:20] for aid in unique_aids3 if aid in top_20e]))
+    for i, aid in enumerate(aids5):
+        aids_temp[aid] += 1
+        if i % (20) == 0:
+            aids_temp[aid] += 1
+    top_aids2 = [k for k, v in aids_temp.most_common(1) if k not in unique_aids]
+
+    aids3 = list(itertools.chain(*[top_20c[aid][:10] for aid in top_aids2 if aid in top_20c]))
+    for i, aid in enumerate(aids3):
+        aids_temp[aid] += 1
+        if i % (10) == 0:
+            aids_temp[aid] += 1
+    top_aids2 = [k for k, v in aids_temp.most_common(ITEM_CT2) if k not in unique_aids]
+
+    result = top_aids2
+    return session, (result + top_clicks[: ITEM_CT2 - len(result)])[:ITEM_CT2]
+
+
+# ---------------------------------------------------------------------------
+# model-709: suggest_aids / suggest_orders on make-valid-lists rows, 100 candidates
+# ---------------------------------------------------------------------------
+# Extra matrices: day = v155_d0 (top_40_day), day2 = v157_d0 (top_40_day2),
+# less = v167, more = v168, less2 = v165, more2 = v166. `click_df` is model-620's output
+# (session -> 50 aids, padding included); 709 uses its first ITEM_CT3 = 10.
+
+
+def _sets_709(df):
+    aids, types, tss, ds, ds1, ds2 = df[1], df[2], df[3], df[4], df[5], df[6]
+    unique_aids = list(dict.fromkeys(aids[::-1]))
+    mx = np.max(ds)
+    unique_aids4 = list(dict.fromkeys([f for i, f in enumerate(aids) if ds[i] == mx][::-1]))
+    mx = np.max(tss)
+    unique_aids5 = list(dict.fromkeys([f for i, f in enumerate(aids) if tss[i] >= mx - 60 * 60 / 2][::-1]))
+    unique_aids6 = list(dict.fromkeys([f for i, f in enumerate(aids) if tss[i] >= mx - 60 * 60 * 24][::-1]))
+    unique_aids2 = list(dict.fromkeys([f for i, f in enumerate(aids) if ds1[i] == 1][::-1]))
+    unique_aids3 = list(dict.fromkeys([f for i, f in enumerate(aids) if ds2[i] == 1][::-1]))
+    unique_buys = list(dict.fromkeys([f for i, f in enumerate(aids) if types[i] in [1, 2]][::-1]))
+    return unique_aids, unique_aids2, unique_aids3, unique_aids4, unique_aids5, unique_aids6, unique_buys
+
+
+def suggest_aids_709(df, M, click_df, ITEM_CT=100, ITEM_CT3=10, top_clicks=()):
+    """model-709 `suggest_aids`. Returns (aids, scores) like the 564 ports (scores as
+    model-709-wgt writes them)."""
+    top_clicks = list(top_clicks)
+    top_20, top_20b, top_20c = M["top20"], M["top20b"], M["top20c"]
+    top_20e, top_20f, top_20_test2 = M["top20e"], M["top20f"], M["top20test2"]
+    top_20_new2 = M["top20new2"]
+
+    session = df[0]
+    aids = df[1]
+    types = df[2]
+
+    top_day = M["day2"]
+    click_aids = click_df[session][:ITEM_CT3]
+
+    unique_aids, _, unique_aids3, unique_aids4, _, unique_aids6, _ = _sets_709(df)
+
+    ln = len(unique_aids)  # noqa: F841 (used only by a rule the notebook commented out)
+
+    if len(unique_aids) >= 15:
+        weights = np.logspace(0.1, 1, len(aids), base=2, endpoint=True) - 1
+        aids_temp = Counter()
+        for aid, w, t in zip(aids, weights, types):
+            aids_temp[aid] += w * type_weight_multipliers[t]
+        aids3 = list(itertools.chain(*[top_20c[aid][: 20 * 2] for aid in unique_aids[:2] if aid in top_20c]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.6
+        aids3 = list(itertools.chain(*[top_20b[aid][: 15 * 2] for aid in unique_aids3 if aid in top_20b]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.3
+        aids3 = list(itertools.chain(*[top_20_test2[aid][: 20 * 2] for aid in unique_aids[:2] if aid in top_20_test2]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.6
+
+        result, scores = _ranked(aids_temp, ITEM_CT)
+        return _out(result, scores, top_clicks, ITEM_CT)
+
+    aids_temp = Counter()
+
+    # NEW
+    MM = 4
+    aids2 = list(itertools.chain(*[top_day[aid][: 10 * MM] for aid in unique_aids6 if aid in top_day]))
+    for i, aid in enumerate(aids2):
+        aids_temp[aid] += 1
+
+    # NEW NEW
+    aids2 = list(itertools.chain(*[top_20[aid][:20] for aid in click_aids if aid in top_20]))
+    for i, aid in enumerate(aids2):
+        aids_temp[aid] += 0.5
+
+    weights3 = [2, 2] + [1] * 28
+    if len(unique_aids) == 1:
+        aids5 = list(itertools.chain(*[top_20_new2[aid][:30] for aid in unique_aids[-1:] if aid in top_20_new2]))
+        w5 = weights3 * int(len(aids5) // 30)
+        for aid, w in zip(aids5, w5):
+            aids_temp[aid] += w
+
+    # FROM GIBA
+    for i, a in enumerate(unique_aids):
+        w0 = np.max([1 - (0.35 * i), 0.001])  # Weight aid order starting from the last one.
+        if a in top_20:
+            for j, aj in enumerate(top_20[a]):
+                w1 = np.max([1 - (0.005 * j), 0.01])  # Weight the candidate aid from the dict
+                aids_temp[aj] += w0 * w1
+
+    aids3 = list(itertools.chain(*[top_20b[aid][: 20 * 2] for aid in unique_aids[:2] if aid in top_20b]))
+    for i, aid in enumerate(aids3):
+        aids_temp[aid] += 1
+        if i % (20 * 2) == 0:
+            aids_temp[aid] += 1
+
+    aids3 = list(itertools.chain(*[top_20_test2[aid][: 20 * 2] for aid in unique_aids[:2] if aid in top_20_test2]))
+    for i, aid in enumerate(aids3):
+        aids_temp[aid] += 1
+        if i % (20 * 2) == 0:
+            aids_temp[aid] += 1
+
+    aids4 = list(itertools.chain(*[top_20f[aid][: 10 * 2] for aid in unique_aids4 if aid in top_20f]))
+    for i, aid in enumerate(aids4):
+        w = i // (10 * 2)
+        aids_temp[aid] += 1 - w * 0.1
+        if i % (10 * 2) == 0:
+            aids_temp[aid] += 1 - w * 0.1
+
+    aids5 = list(itertools.chain(*[top_20e[aid][: 20 * 2] for aid in unique_aids3 if aid in top_20e]))
+    for i, aid in enumerate(aids5):
+        aids_temp[aid] += 1
+        if i % (20 * 2) == 0:
+            aids_temp[aid] += 1
+    top_aids2 = [k for k, v in aids_temp.most_common(1) if k not in unique_aids]
+
+    aids3 = list(itertools.chain(*[top_20c[aid][: 10 * 2] for aid in top_aids2 if aid in top_20c]))
+    for i, aid in enumerate(aids3):
+        aids_temp[aid] += 1
+        if i % (10 * 2) == 0:
+            aids_temp[aid] += 1
+    top_aids2, scores = _ranked(aids_temp, ITEM_CT, exclude=unique_aids)
+
+    result = unique_aids + top_aids2[: ITEM_CT - len(unique_aids)]
+    scores = [-1] * len(unique_aids) + scores[: ITEM_CT - len(unique_aids)]
+    return _out(result, scores, top_clicks, ITEM_CT)
+
+
+def suggest_orders_709(df, M, click_df, ITEM_CT=100, ITEM_CT3=10, top_orders=()):
+    """model-709 `suggest_orders` (also the carts list). Returns (aids, scores)."""
+    top_orders = list(top_orders)
+    top_20b, top_20c, top_20d = M["top20b"], M["top20c"], M["top20d"]
+    top_20e, top_20f, top_20_orders = M["top20e"], M["top20f"], M["top20orders"]
+    top_20_buy2buy, top_20_buy2buy2 = M["top20buy2buy"], M["top20buy2buy2"]
+    top_20_test, top_20_buy = M["top20test"], M["top20buy"]
+    top_20_new, top_20_new2 = M["top20new"], M["top20new2"]
+    top_40_less, top_40_more, top_40_less2, top_40_more2 = M["less"], M["more"], M["less2"], M["more2"]
+
+    session = df[0]
+    aids = df[1]
+    types = df[2]
+
+    top_day = M["day"]
+    click_aids = click_df[session][:ITEM_CT3]
+
+    unique_aids, unique_aids2, unique_aids3, unique_aids4, unique_aids5, unique_aids6, unique_buys = _sets_709(df)
+
+    if len(unique_aids) >= 20:
+        weights = np.logspace(0.5, 1, len(aids), base=2, endpoint=True) - 1
+        aids_temp = Counter()
+        for aid, w, t in zip(aids, weights, types):
+            aids_temp[aid] += w * type_weight_multipliers[t]
+        for aid in unique_aids2:
+            aids_temp[aid] += 0.5
+        for aid in unique_aids3:
+            aids_temp[aid] += 0.5
+
+        aids3 = list(itertools.chain(*[top_20_buy2buy[aid][:40] for aid in unique_buys if aid in top_20_buy2buy]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.05
+            if i % 40 == 0:
+                aids_temp[aid] += 0.05
+        aids3 = list(itertools.chain(*[top_20_buy2buy2[aid][:40] for aid in unique_buys if aid in top_20_buy2buy2]))
+        for i, aid in enumerate(aids3):
+            aids_temp[aid] += 0.1
+            if i % 40 == 0:
+                aids_temp[aid] += 0.1
+
+        aids4 = list(itertools.chain(*[top_20_test[aid][:40] for aid in unique_aids if aid in top_20_test]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.05
+            if i % 40 == 0:
+                aids_temp[aid] += 0.05
+        aids5 = list(itertools.chain(*[top_20c[aid][:20] for aid in unique_aids[:1] if aid in top_20c]))
+        for i, aid in enumerate(aids5):
+            aids_temp[aid] += 0.05
+            if i % 20 == 0:
+                aids_temp[aid] += 0.05
+        aids6 = list(itertools.chain(*[top_20d[aid][:20] for aid in unique_buys[:1] if aid in top_20d]))
+        for i, aid in enumerate(aids6):
+            aids_temp[aid] += 0.05
+            if i % 20 == 0:
+                aids_temp[aid] += 0.05
+
+        aids7 = list(itertools.chain(*[top_20b[aid][:5] for aid in unique_aids3 if aid in top_20b]))
+        for i, aid in enumerate(aids7):
+            aids_temp[aid] += 0.25
+            if i % 5 == 0:
+                aids_temp[aid] += 0.25
+        aids7 = list(itertools.chain(*[top_20b[aid][:5] for aid in unique_aids2 if aid in top_20b]))
+        for i, aid in enumerate(aids7):
+            aids_temp[aid] += 0.125
+            if i % 5 == 0:
+                aids_temp[aid] += 0.125
+
+        aids4 = list(itertools.chain(*[top_day[aid][:40] for aid in unique_aids6 if aid in top_day]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.05
+            if i % 40 == 0:
+                aids_temp[aid] += 0.05
+        aids4 = list(itertools.chain(*[top_20_test[aid][:20] for aid in click_aids if aid in top_20_test]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.05
+            if i % 20 == 0:
+                aids_temp[aid] += 0.05
+        aids4 = list(itertools.chain(*[top_20_buy[aid][:20] for aid in click_aids if aid in top_20_buy]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.05
+            if i % 20 == 0:
+                aids_temp[aid] += 0.05
+        for aid in click_aids:
+            aids_temp[aid] += 0.05
+
+        # NEW STUFF
+        aids4 = list(itertools.chain(*[top_40_more[aid][:5] for aid in unique_aids if aid in top_40_more]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.03
+            if i % 5 == 0:
+                aids_temp[aid] += 0.03
+        aids4 = list(itertools.chain(*[top_40_more2[aid][:5] for aid in unique_aids if aid in top_40_more2]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.03
+            if i % 5 == 0:
+                aids_temp[aid] += 0.03
+        aids4 = list(itertools.chain(*[top_40_less[aid][:5] for aid in unique_aids if aid in top_40_less]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.03
+            if i % 5 == 0:
+                aids_temp[aid] += 0.03
+        aids4 = list(itertools.chain(*[top_40_less2[aid][:5] for aid in unique_aids if aid in top_40_less2]))
+        for i, aid in enumerate(aids4):
+            aids_temp[aid] += 0.03
+            if i % 5 == 0:
+                aids_temp[aid] += 0.03
+
+        result, scores = _ranked(aids_temp, ITEM_CT)
+        return _out(result, scores, top_orders, ITEM_CT)
+
+    weights = [2, 2] + [1] * 8
+    weights2 = [2, 2] + [1] * 53
+    weights3 = [2, 2] + [1] * 18
+    weights4 = [2, 2] + [1] * 38
+    weights5 = [2, 2] + [1] * 28
+
+    ln = len(unique_aids)
+
+    MM = 3
+    aids_temp = Counter()
+    aids2 = list(itertools.chain(*[top_20_orders[aid][: 10 * MM] for aid in unique_aids if aid in top_20_orders]))
+    w2 = weights5 * int(len(aids2) // (10 * MM))
+    aids3 = list(itertools.chain(*[top_20_buy2buy[aid][: 10 * MM] for aid in unique_buys if aid in top_20_buy2buy]))
+    w3 = weights5 * int(len(aids3) // (10 * MM))
+    aids4 = list(itertools.chain(*[top_20_test[aid][: 10 * MM] for aid in unique_aids if aid in top_20_test]))
+    w4 = weights5 * int(len(aids4) // (10 * MM))
+    aids5 = list(itertools.chain(*[top_20_buy2buy2[aid][: 10 * MM] for aid in unique_buys if aid in top_20_buy2buy2]))
+    w5 = weights5 * int(len(aids5) // (10 * MM))
+    for i, (aid, w) in enumerate(zip(aids2, w2)):
+        m = 0.25 + 0.75 * (ln - (i // (10 * MM))) / ln
+        aids_temp[aid] += w * m
+    for i, (aid, w) in enumerate(zip(aids3, w3)):
+        aids_temp[aid] += w / 2
+    for i, (aid, w) in enumerate(zip(aids4, w4)):
+        m = 0.25 + 0.75 * (ln - (i // (10 * MM))) / ln
+        aids_temp[aid] += w * m
+    for i, (aid, w) in enumerate(zip(aids5, w5)):
+        aids_temp[aid] += w / 2
+
+    for top_40_use in [top_40_more, top_40_less, top_40_more2, top_40_less2]:
+        MM = 1
+        aids2 = list(itertools.chain(*[top_40_use[aid][: 10 * MM] for aid in unique_aids if aid in top_40_use]))
+        w2 = weights * int(len(aids2) // (10 * MM))
+        for i, (aid, w) in enumerate(zip(aids2, w2)):
+            m = 0.25 + 0.75 * (ln - (i // (10 * MM))) / ln
+            aids_temp[aid] += w * m
+
+    MM = 4
+    aids2 = list(itertools.chain(*[top_day[aid][: 10 * MM] for aid in unique_aids6 if aid in top_day]))
+    w2 = weights4 * int(len(aids2) // (10 * MM))
+    for i, (aid, w) in enumerate(zip(aids2, w2)):
+        aids_temp[aid] += 1
+
+    ln0 = len(click_aids)
+    aids4 = list(itertools.chain(*[top_20_test[aid][:20] for aid in click_aids if aid in top_20_test]))
+    w4 = weights3 * int(len(aids4) // (20))
+    for i, (aid, w) in enumerate(zip(aids4, w4)):
+        m = 0.25 + 0.75 * (ln0 - (i // (20))) / ln0
+        aids_temp[aid] += w * m
+    aids4 = list(itertools.chain(*[top_20_buy[aid][:20] for aid in click_aids if aid in top_20_buy]))
+    w4 = weights3 * int(len(aids4) // (20))
+    for i, (aid, w) in enumerate(zip(aids4, w4)):
+        m = 0.25 + 0.75 * (ln0 - (i // (20))) / ln0
+        aids_temp[aid] += w * m
+    for aid in click_aids:
+        aids_temp[aid] += 1
+
+    aids5 = list(itertools.chain(*[top_20c[aid][:55] for aid in unique_aids[:1] if aid in top_20c]))
+    w5 = weights2 * int(len(aids5) // 55)
+    for aid, w in zip(aids5, w5):
+        aids_temp[aid] += w
+
+    if len(unique_aids) == 1:
+        aids5 = list(itertools.chain(*[top_20_new2[aid][:20] for aid in unique_aids[-1:] if aid in top_20_new2]))
+        w5 = weights3 * int(len(aids5) // 20)
+        for aid, w in zip(aids5, w5):
+            aids_temp[aid] += w
+        aids5 = list(itertools.chain(*[top_20_new[aid][:20] for aid in unique_aids[-1:] if aid in top_20_new]))
+        w5 = weights3 * int(len(aids5) // 20)
+        for aid, w in zip(aids5, w5):
+            aids_temp[aid] += w
+
+    aids5 = list(itertools.chain(*[top_20d[aid][:20] for aid in unique_buys[:1] if aid in top_20d]))
+    w5 = weights3 * int(len(aids5) // 20)
+    for aid, w in zip(aids5, w5):
+        aids_temp[aid] += w
+
+    ln2 = len(unique_aids5)
+    aids5 = list(itertools.chain(*[top_20_buy[aid][:20] for aid in unique_aids5 if aid in top_20_buy]))
+    w5 = weights3 * int(len(aids5) // 20)
+    for aid, w in zip(aids5, w5):
+        aids_temp[aid] += 2 * w / ln2
+
+    aids4 = list(itertools.chain(*[top_20f[aid][:5] for aid in unique_aids4 if aid in top_20f]))
+    for i, aid in enumerate(aids4):
+        w = i // 5
+        aids_temp[aid] += 1 / 2 - w * 0.05
+        if i % 5 == 0:
+            aids_temp[aid] += 1 / 2 - w * 0.05
+    aids5 = list(itertools.chain(*[top_20e[aid][:55] for aid in unique_aids3 if aid in top_20e]))
+    w5 = weights2 * int(len(aids5) // 55)
+    for i, (aid, w) in enumerate(zip(aids5, w5)):
+        w2 = i // 55
+        aids_temp[aid] += w - w2 * 0.1
+    aids5 = list(itertools.chain(*[top_20e[aid][:10] for aid in unique_aids2 if aid in top_20e]))
+    w5 = weights * int(len(aids5) // 10)
+    for i, (aid, w) in enumerate(zip(aids5, w5)):
+        w2 = i // 10
+        aids_temp[aid] += w / 2.0 - w2 * 0.05
+
+    sorted_aids, scores = _ranked(aids_temp, ITEM_CT, exclude=unique_aids)
+
+    result = unique_aids + sorted_aids[: ITEM_CT - len(unique_aids)]
+    scores = [-1] * len(unique_aids) + scores[: ITEM_CT - len(unique_aids)]
+    return _out(result, scores, top_orders, ITEM_CT)

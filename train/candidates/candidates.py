@@ -88,6 +88,11 @@ SOURCE_SETS: dict[str, tuple[pl.Expr, Order]] = {
     ),
     # unique_buys: carts and orders
     "buys": (pl.col("type").is_in([CARTS, ORDERS]), "recent"),
+    # unique_aids6 (model-709): events within a day of the session's last event
+    "last_day": (
+        pl.col("ts").max().over("session") - pl.col("ts") <= pl.duration(days=1),
+        "recent",
+    ),
 }
 
 
@@ -130,6 +135,9 @@ RULE_STRIDE = 2**33  # order = rule number * RULE_STRIDE + 2 * i + bonus
 IX = pl.col("i")  # position in the rule's concatenated neighbour lists
 LN = pl.col("ln")  # len(unique_aids)
 LN2 = pl.col("ln2")  # len(unique_aids5)
+LN0 = pl.col("ln0")  # len(click_aids) in model-709
+SRC = pl.col("src_idx")  # index of the source aid in its list
+RANK = pl.col("rank")  # index of the neighbour in the source aid's list
 
 
 def pattern(k: int) -> pl.Expr:
@@ -144,7 +152,7 @@ class Rule:
         self,
         include: str,
         source: str,
-        k: int,
+        k: int | None,
         weight: pl.Expr | float,
         *,
         n_sources: int | None = None,
@@ -152,17 +160,24 @@ class Rule:
         truncate: bool = False,
         when: pl.Expr | None = None,
         matrix: str | None = None,
+        constant: bool = False,
     ):
         self.include = include
         self.matrix = matrix or include
         self.source = source  # a SOURCE_SETS name, or TOP1 (see below)
-        self.k = k
+        self.k = k  # neighbours per source aid (None: all of them)
         self.weight = weight if isinstance(weight, pl.Expr) else pl.lit(float(weight))
         self.n_sources = n_sources  # SOURCE[:n]
         self.bonus = bonus  # if i % k == 0: add the weight again
         self.truncate = truncate  # zip with a pattern list: keep i < k * (n // k)
         self.when = when  # session condition on ln / ln2, e.g. LN == 1
+        # `for aid in SOURCE: aids_temp[aid] += weight` (no matrix; i = src_idx)
+        self.constant = constant
 
+
+# model-709's click_aids: model-620's first 10 candidates (padding included, so an aid
+# can appear twice; the reference's loops then count it twice). Passed to suggest_564.
+CLICKS_620 = "click620"
 
 # source for model-564 suggest_aids' second-order rule:
 # `top_aids2 = [k for k,v in aids_temp.most_common(1) if k not in unique_aids]`
@@ -182,22 +197,32 @@ def neighbours(matrix: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
 
 
 def rule_contributions(
-    sources: pl.LazyFrame, nbrs: pl.LazyFrame, rule: Rule, rule_no: int, session_info: pl.LazyFrame
+    sources: pl.LazyFrame, nbrs: pl.LazyFrame | None, rule: Rule, rule_no: int, session_info: pl.LazyFrame
 ) -> pl.LazyFrame:
     """Contributions `session, aid, score, order` of one rule.
 
     `sources`: session, aid, src_idx. `session_info`: session, ln, ln2."""
     if rule.n_sources is not None:
         sources = sources.filter(pl.col("src_idx") < rule.n_sources)
-    key = pl.col("src_idx").cast(pl.Int64) * 2**20 + pl.col("rank")
-    rows = (
-        sources.join(nbrs.filter(pl.col("rank") < rule.k), on="aid")
-        .with_columns(
-            i=(key.rank("ordinal").over("session") - 1).cast(pl.Int64),
+    if rule.constant:
+        rows = sources.with_columns(
+            aid_y=pl.col("aid"),
+            rank=pl.lit(0, pl.UInt32),
+            i=pl.col("src_idx").cast(pl.Int64),
             n=pl.len().over("session"),
+        ).join(session_info, on="session", how="left")
+    else:
+        if rule.k is not None:
+            nbrs = nbrs.filter(pl.col("rank") < rule.k)
+        key = pl.col("src_idx").cast(pl.Int64) * 2**20 + pl.col("rank")
+        rows = (
+            sources.join(nbrs, on="aid")
+            .with_columns(
+                i=(key.rank("ordinal").over("session") - 1).cast(pl.Int64),
+                n=pl.len().over("session"),
+            )
+            .join(session_info, on="session", how="left")
         )
-        .join(session_info, on="session", how="left")
-    )
     if rule.when is not None:
         rows = rows.filter(rule.when)
     if rule.truncate:
@@ -207,7 +232,7 @@ def rule_contributions(
         pl.col("aid_y").alias("aid"),
         score=rule.weight.cast(pl.Float64),
         order=rule_no * RULE_STRIDE + 2 * pl.col("i"),
-        _bonus=(pl.col("i") % rule.k == 0) if rule.bonus else pl.lit(False),
+        _bonus=(pl.col("i") % rule.k == 0) if rule.bonus else pl.lit(False),  # bonus needs k
     )
     bonus = rows.filter("_bonus").with_columns(order=pl.col("order") + 1)
     return pl.concat([rows, bonus]).drop("_bonus")
@@ -337,22 +362,114 @@ ORDERS_COVISIT_612 = [*ORDERS_COVISIT_564[:5], NEW2_ORDERS, NEW_ORDERS, *ORDERS_
 AIDS_COVISIT_614 = [NEW2_CLICKS]
 ORDERS_COVISIT_614 = [NEW2_ORDERS, NEW_ORDERS]
 
-Family = Literal["564", "612", "614"]
+# model-620 (clicks only): 612's clicks rules, but unique_aids3 is the last event of each
+# sub-session latest first ("last_of_d", built from make-valid-lists' b flags), the
+# history branch starts at 15 unique aids, and history aids are dropped from the output.
+AIDS_HISTORY_620 = [
+    Rule("top20c", "all", 20, 0.6, n_sources=2),
+    Rule("top20b", "last_of_d", 15, 0.3),
+    Rule("top20test2", "all", 20, 0.6, n_sources=2),
+]
+AIDS_COVISIT_620 = [
+    NEW2_CLICKS,
+    Rule("top20", "all", 20, 0.1 + 0.9 * (LN - IX // 20) / LN, bonus=True),
+    Rule("top20b", "all", 20, 1, n_sources=2, bonus=True),
+    Rule("top20test2", "all", 20, 1, n_sources=2, bonus=True),
+    Rule("top20f", "last_d", 10, 1 - (IX // 10) * 0.1, bonus=True),
+    Rule("top20e", "last_of_d", 20, 1, bonus=True),
+    Rule("top20c", TOP1, 10, 1, bonus=True),
+]
+
+# model-709: 100 candidates; neighbour counts doubled and extra matrices: day = v155_d0,
+# day2 = v157_d0, less = v167, more = v168, less2 = v165, more2 = v166.
+M_ORDERS_30 = 0.25 + 0.75 * (LN - IX // 30) / LN  # m with MM = 3
+M_CLICKS_620 = 0.25 + 0.75 * (LN0 - IX // 20) / LN0  # m over click_aids
+GIBA = pl.max_horizontal(1 - 0.35 * SRC, pl.lit(0.001)) * pl.max_horizontal(1 - 0.005 * RANK, pl.lit(0.01))
+
+AIDS_HISTORY_709 = [
+    Rule("top20c", "all", 40, 0.6, n_sources=2),
+    Rule("top20b", "last_of_d", 30, 0.3),
+    Rule("top20test2", "all", 40, 0.6, n_sources=2),
+]
+AIDS_COVISIT_709 = [
+    Rule("day2", "last_day", 40, 1),
+    Rule("top20", CLICKS_620, 20, 0.5),
+    NEW2_CLICKS,
+    Rule("top20", "all", None, GIBA),  # "FROM GIBA": every neighbour, weighted by both indices
+    Rule("top20b", "all", 40, 1, n_sources=2, bonus=True),
+    Rule("top20test2", "all", 40, 1, n_sources=2, bonus=True),
+    Rule("top20f", "last_d", 20, 1 - (IX // 20) * 0.1, bonus=True),
+    Rule("top20e", "last_of_d", 40, 1, bonus=True),
+    Rule("top20c", TOP1, 20, 1, bonus=True),
+]
+ORDERS_HISTORY_709 = [
+    *ORDERS_HISTORY_564,
+    Rule("day", "last_day", 40, 0.05, bonus=True),
+    Rule("top20test", CLICKS_620, 20, 0.05, bonus=True),
+    Rule("top20buy", CLICKS_620, 20, 0.05, bonus=True),
+    Rule(CLICKS_620, CLICKS_620, None, 0.05, constant=True),
+    Rule("more", "all", 5, 0.03, bonus=True),
+    Rule("more2", "all", 5, 0.03, bonus=True),
+    Rule("less", "all", 5, 0.03, bonus=True),
+    Rule("less2", "all", 5, 0.03, bonus=True),
+]
+ORDERS_COVISIT_709 = [
+    Rule("top20orders", "all", 30, pattern(30) * M_ORDERS_30, truncate=True),
+    Rule("top20buy2buy", "buys", 30, pattern(30) / 2, truncate=True),
+    Rule("top20test", "all", 30, pattern(30) * M_ORDERS_30, truncate=True),
+    Rule("top20buy2buy2", "buys", 30, pattern(30) / 2, truncate=True),
+    Rule("more", "all", 10, pattern(10) * M_ORDERS, truncate=True),
+    Rule("less", "all", 10, pattern(10) * M_ORDERS, truncate=True),
+    Rule("more2", "all", 10, pattern(10) * M_ORDERS, truncate=True),
+    Rule("less2", "all", 10, pattern(10) * M_ORDERS, truncate=True),
+    Rule("day", "last_day", 40, 1, truncate=True),  # weight 1, but still zip-truncated
+    Rule("top20test", CLICKS_620, 20, pattern(20) * M_CLICKS_620, truncate=True),
+    Rule("top20buy", CLICKS_620, 20, pattern(20) * M_CLICKS_620, truncate=True),
+    Rule(CLICKS_620, CLICKS_620, None, 1, constant=True),
+    Rule("top20c", "all", 55, pattern(55), n_sources=1, truncate=True),
+    NEW2_ORDERS,
+    NEW_ORDERS,
+    Rule("top20d", "buys", 20, pattern(20), n_sources=1, truncate=True),
+    Rule("top20buy", "last_30min", 20, 2 * pattern(20) / LN2, truncate=True),
+    Rule("top20f", "last_d", 5, 0.5 - (IX // 5) * 0.05, bonus=True),
+    Rule("top20e", "last_of_d", 55, pattern(55) - (IX // 55) * 0.1, truncate=True),
+    Rule("top20e", "first_of_d", 10, pattern(10) / 2.0 - (IX // 10) * 0.05, truncate=True),
+]
+
+Family = Literal["564", "612", "614", "620", "709"]
 # family -> target -> (history-branch rules, covisit-branch rules)
 RULES: dict[str, dict[str, tuple[list[Rule], list[Rule]]]] = {
     "564": {"clicks": (AIDS_HISTORY_564, AIDS_COVISIT_564), "orders": (ORDERS_HISTORY_564, ORDERS_COVISIT_564)},
     "612": {"clicks": (AIDS_HISTORY_564, AIDS_COVISIT_612), "orders": (ORDERS_HISTORY_564, ORDERS_COVISIT_612)},
     "614": {"clicks": (AIDS_HISTORY_564, AIDS_COVISIT_614), "orders": (ORDERS_HISTORY_564, ORDERS_COVISIT_614)},
+    "620": {"clicks": (AIDS_HISTORY_620, AIDS_COVISIT_620)},
+    "709": {"clicks": (AIDS_HISTORY_709, AIDS_COVISIT_709), "orders": (ORDERS_HISTORY_709, ORDERS_COVISIT_709)},
 }
+# unique aids from which a session takes the history branch (branch "auto")
+HISTORY_THRESHOLD = {
+    ("564", "clicks"): 20, ("564", "orders"): 20,
+    ("612", "clicks"): 20, ("612", "orders"): 20,
+    ("614", "clicks"): 20, ("614", "orders"): 20,
+    ("620", "clicks"): 15,
+    ("709", "clicks"): 15, ("709", "orders"): 20,
+}
+# families whose output drops history aids: `[k for k,v in most_common(n) if k not in
+# unique_aids]` (the top n first, then the filter, so fewer than n can remain)
+DROPS_HISTORY = {"620"}
 
 Branch = Literal["auto", "history", "covisit"]
 Target = Literal["clicks", "orders"]
 
 
-def _session_info(events: pl.LazyFrame, all_aids: pl.LazyFrame, last_30min: pl.LazyFrame) -> pl.LazyFrame:
+def _session_info(
+    all_aids: pl.LazyFrame, last_30min: pl.LazyFrame, clicks: pl.LazyFrame | None
+) -> pl.LazyFrame:
     ln = all_aids.group_by("session").agg(ln=pl.len())
     ln2 = last_30min.group_by("session").agg(ln2=pl.len())
-    return ln.join(ln2, on="session", how="left")
+    info = ln.join(ln2, on="session", how="left")
+    if clicks is not None:
+        info = info.join(clicks.group_by("session").agg(ln0=pl.len()), on="session", how="left")
+    return info
 
 
 def _top1_new(contribs: list[pl.LazyFrame], all_aids: pl.LazyFrame) -> pl.LazyFrame:
@@ -371,16 +488,22 @@ def _contributions(
     rules: list[Rule],
     include: set[str],
     first_rule_no: int,
+    clicks: pl.LazyFrame | None = None,
 ) -> list[pl.LazyFrame]:
-    """`history` contributions followed by those of the included `rules`."""
+    """`history` contributions followed by those of the included `rules`. `clicks`:
+    the CLICKS_620 source (session, aid, src_idx)."""
     sets: dict[str, pl.LazyFrame] = {}
+    if clicks is not None:
+        sets[CLICKS_620] = clicks.join(events.select("session").unique(), on="session", how="semi")
 
     def source(name: str) -> pl.LazyFrame:
         if name not in sets:
+            if name == CLICKS_620:
+                raise ValueError("this family's rules need the model-620 clicks (clicks620=)")
             sets[name] = source_set(events, name)
         return sets[name]
 
-    info = _session_info(events, source("all"), source("last_30min"))
+    info = _session_info(source("all"), source("last_30min"), sets.get(CLICKS_620))
     contribs = list(history)
     for no, rule in enumerate(rules, start=first_rule_no):
         if rule.include not in include:
@@ -392,12 +515,29 @@ def _contributions(
             src = _top1_new(contribs, source("all"))
         else:
             src = source(rule.source)
-        contribs.append(rule_contributions(src, neighbours(matrices[rule.matrix]), rule, no, info))
+        nbrs = None if rule.constant else neighbours(matrices[rule.matrix])
+        contribs.append(rule_contributions(src, nbrs, rule, no, info))
     return contribs
 
 
-def _history_branch(n_unique: pl.Expr, branch: Branch) -> pl.Expr:
-    return {"auto": n_unique >= 20, "history": pl.lit(True), "covisit": pl.lit(False)}[branch]
+def _history_branch(n_unique: pl.Expr, branch: Branch, threshold: int) -> pl.Expr:
+    return {"auto": n_unique >= threshold, "history": pl.lit(True), "covisit": pl.lit(False)}[branch]
+
+
+def _top_without_history(ranked: pl.LazyFrame, history: pl.LazyFrame, item_ct: int) -> pl.LazyFrame:
+    """`[k for k,v in aids_temp.most_common(item_ct) if k not in unique_aids]`, numbered."""
+    return (
+        ranked.filter(pl.col("rnk") < item_ct)
+        .join(history, on=["session", "aid"], how="anti")
+        .sort("session", "rnk")
+        .with_row_index("_row")
+        .select(
+            "session",
+            pos=(pl.col("_row") - pl.col("_row").min().over("session")).cast(pl.UInt32),
+            aid="aid",
+            score="score",
+        )
+    )
 
 
 def suggest_564(
@@ -409,23 +549,36 @@ def suggest_564(
     item_ct: int = 50,
     popular: list[int] | None = None,
     family: Family = "564",
+    clicks620: pl.LazyFrame | pl.DataFrame | None = None,
+    n_clicks620: int = 10,
 ) -> pl.LazyFrame:
-    """model-564/612/614 `suggest_aids` (target="clicks") or `suggest_orders` (target="orders").
+    """model-564/612/614 `suggest_aids` (target="clicks") or `suggest_orders` (target="orders"),
+    and model-620 (family="620", clicks).
 
     `include` is the notebook's INFER list (None: all of the family's rules, as
-    model-564-F, 612 and 614). Returns
-    `session, pos, aid, score`: item_ct rows per session, where score is what the -wgt
-    notebook writes (-1 for history aids placed first in the covisit branch, -2 for
-    `popular` padding).
+    model-564-F, 612, 614 and 620). Returns `session, pos, aid, score`: item_ct rows per
+    session, where score is what the -wgt notebook writes (-1 for history aids placed
+    first in the covisit branch, -2 for `popular` padding). model-620 wrote no scores;
+    its score column holds the Counter values.
+
+    `clicks620` (model-709 only): model-620's output (session, pos, aid); its first
+    `n_clicks620` (ITEM_CT3) aids per session are 709's click_aids.
     """
     hist_rules, cov_rules = RULES[family][target]
+    clicks = (
+        None
+        if clicks620 is None
+        else clicks620.lazy()
+        .filter(pl.col("pos") < n_clicks620)
+        .select("session", "aid", src_idx=pl.col("pos").cast(pl.UInt32))
+    )
     include_set = {r.include for r in hist_rules + cov_rules} if include is None else set(include)
     matrices = {k: v.lazy() for k, v in matrices.items()}
     events = add_subsessions(events)
     all_aids = source_set(events, "all")
     in_history = (
         all_aids.group_by("session")
-        .agg(_hist=_history_branch(pl.len(), branch))
+        .agg(_hist=_history_branch(pl.len(), branch, HISTORY_THRESHOLD[family, target]))
         .select("session", "_hist")
     )
     events = events.join(in_history, on="session")
@@ -447,12 +600,20 @@ def suggest_564(
     hist = rank_scores(total_scores(pl.concat(_contributions(
         hist_events, matrices,
         [history_contributions(hist_events, start, rule_no=0), *hist_extra],
-        hist_rules, include_set, first_rule,
+        hist_rules, include_set, first_rule, clicks,
     ))))
-    hist_out = hist.filter(pl.col("rnk") < item_ct).select("session", pos=pl.col("rnk"), aid="aid", score="score")
-
     cov_aids = source_set(cov_events, "all")
-    cov_contribs = _contributions(cov_events, matrices, [], cov_rules, include_set, first_rule_no=0)
+    cov_contribs = _contributions(cov_events, matrices, [], cov_rules, include_set, first_rule_no=0, clicks=clicks)
+
+    if family in DROPS_HISTORY:
+        cov = rank_scores(total_scores(pl.concat(cov_contribs)))
+        out = pl.concat([
+            _top_without_history(hist, source_set(hist_events, "all"), item_ct),
+            _top_without_history(cov, cov_aids, item_ct),
+        ])
+        return _pad(out, popular or [], item_ct, in_history).sort("session", "pos")
+
+    hist_out = hist.filter(pl.col("rnk") < item_ct).select("session", pos=pl.col("rnk"), aid="aid", score="score")
     cov_new = (
         rank_scores(
             total_scores(pl.concat(cov_contribs, how="vertical"))
@@ -470,14 +631,17 @@ def suggest_564(
     ]).filter(pl.col("pos") < item_ct)
 
     out = pl.concat([hist_out, cov_out])
-    return _pad(out, popular or [], item_ct).sort("session", "pos")
+    return _pad(out, popular or [], item_ct, in_history).sort("session", "pos")
 
 
-def _pad(out: pl.LazyFrame, popular: list[int], item_ct: int) -> pl.LazyFrame:
-    """`(result + top_x[:ITEM_CT-len(result)])[:ITEM_CT]`, scores -2 (top_x = [-2]*100)."""
+def _pad(out: pl.LazyFrame, popular: list[int], item_ct: int, sessions: pl.LazyFrame) -> pl.LazyFrame:
+    """`(result + top_x[:ITEM_CT-len(result)])[:ITEM_CT]`, scores -2 (top_x = [-2]*100).
+    `sessions` (a `session` column) also pads sessions with no rows in `out`."""
     if not popular:
         return out
-    counts = out.group_by("session").agg(n=pl.len().cast(pl.UInt32))
+    counts = sessions.select("session").join(
+        out.group_by("session").agg(n=pl.len().cast(pl.UInt32)), on="session", how="left"
+    ).with_columns(pl.col("n").fill_null(0))
     pad = pl.LazyFrame(
         {"j": list(range(len(popular))), "aid": popular, "_k": [0] * len(popular)},
         schema={"j": pl.UInt32, "aid": pl.Int32, "_k": pl.UInt8},
@@ -519,4 +683,7 @@ RUNS: dict[str, tuple[Family, Target, list[str] | None, Branch]] = {
     "612_orders": ("612", "orders", None, "covisit"),
     "614_clicks": ("614", "clicks", None, "covisit"),
     "614_orders": ("614", "orders", None, "covisit"),
+    "620": ("620", "clicks", None, "auto"),
+    "709_clicks": ("709", "clicks", None, "auto"),
+    "709_orders": ("709", "orders", None, "auto"),
 }

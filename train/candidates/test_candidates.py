@@ -157,6 +157,12 @@ def _reference_sets():
         for name, aids in sets620.items():
             # model-620 builds the same sets from the pickled lists
             assert aids == out[row[0]][name], (row[0], name)
+        u, u2, u3, u4, u5, u6, buys = ref._sets_709(row)
+        # ... and so does model-709, which adds last_day (unique_aids6)
+        assert (u, u2, u3, u4, u5, buys) == tuple(
+            out[row[0]][n] for n in ["all", "first_of_d", "last_of_d", "last_d", "last_30min", "buys"]
+        ), row[0]
+        out[row[0]]["last_day"] = u6
     return out
 
 
@@ -211,7 +217,9 @@ def _long_sessions(n_sessions, seed):
     return base.with_columns(aid=pl.Series(rng.integers(0, 45, base.height), dtype=pl.Int32))
 
 
-MATRICES = _random_matrices([*candidates.ALL_564, "top20new", "top20new2"], seed=3)
+MATRICES = _random_matrices(
+    [*candidates.ALL_564, "top20new", "top20new2", "day", "day2", "less", "more", "less2", "more2"], seed=3
+)
 MATRIX_DICTS = _as_dicts(MATRICES)
 EVENTS_564 = pl.concat([
     _long_sessions(150, seed=4),
@@ -235,7 +243,42 @@ REF_INFER = {
 }
 
 
+def _reference_620(item_ct):
+    rows = ref.valid_lists(ref.add_a_b(ref.add_d(ref.to_reference_frame(EVENTS_564))))
+    out = []
+    for row in rows:
+        session, aids = ref.suggest_aids_620(row, MATRIX_DICTS, ITEM_CT2=item_ct, top_clicks=POPULAR)
+        out += [(session, pos, a) for pos, a in enumerate(aids)]
+    return pl.DataFrame(out, schema={"session": pl.Int32, "pos": pl.UInt32, "aid": pl.Int32}, orient="row")
+
+
+def _clicks_620():
+    """model-620 output (already checked against the reference) as 709's click_aids."""
+    return candidates.suggest_564(
+        EVENTS_564, MATRICES, "clicks", item_ct=50, popular=POPULAR, family="620"
+    ).collect()
+
+
+def _reference_709(target, item_ct):
+    rows = ref.valid_lists(ref.add_a_b(ref.add_d(ref.to_reference_frame(EVENTS_564))))
+    click_df = {s: g["aid"].to_list() for (s,), g in _clicks_620().group_by("session", maintain_order=True)}
+    fn, pad_kw = (
+        (ref.suggest_aids_709, "top_clicks") if target == "clicks" else (ref.suggest_orders_709, "top_orders")
+    )
+    out = []
+    for row in rows:
+        aids, scores = fn(row, MATRIX_DICTS, click_df, ITEM_CT=item_ct, **{pad_kw: POPULAR})
+        out += [(row[0], pos, a, float(sc)) for pos, (a, sc) in enumerate(zip(aids, scores, strict=True))]
+    return pl.DataFrame(
+        out, schema={"session": pl.Int32, "pos": pl.UInt32, "aid": pl.Int32, "score": pl.Float64}, orient="row"
+    )
+
+
 def _reference_564(family, target, include, branch, item_ct):
+    if family == "620":
+        return _reference_620(item_ct)
+    if family == "709":
+        return _reference_709(target, item_ct)
     df = ref.add_d(ref.to_reference_frame(EVENTS_564))
     fn = ref.suggest_aids_564 if target == "clicks" else ref.suggest_orders_564
     pad_kw = "top_clicks" if target == "clicks" else "top_orders"
@@ -268,10 +311,13 @@ GPU_NO_GROUP_CUM_SUM = pytest.param(
 def test_suggest_matches_reference(run, engine, item_ct):
     family, target, include, branch = candidates.RUNS[run]
     expected = _reference_564(family, target, include, branch, item_ct)
-    # rules produced some candidates (not only history aids and padding)
-    assert expected.filter(pl.col("score") >= 0).height > 0
     result = candidates.suggest_564(
         EVENTS_564, MATRICES, target, include=include, branch=branch, item_ct=item_ct, popular=POPULAR,
-        family=family,
+        family=family, clicks620=_clicks_620() if family == "709" else None,
     ).collect(engine=_engine(engine))
+    if family == "620":  # model-620 wrote aids only
+        result = result.drop("score")
+    else:
+        # rules produced some candidates (not only history aids and padding)
+        assert expected.filter(pl.col("score") >= 0).height > 0
     assert_frame_equal(result, expected, check_dtypes=False)
