@@ -76,9 +76,20 @@ dev = [
 ]
 
 
-#[build-system]
-#requires = ["hatchling"]
-#build-backend = "hatchling.build"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Editable install that puts the repo root on sys.path, so modules in
+# train/... and data/ can import shared root modules such as event_types.
+[tool.hatch.build]
+dev-mode-dirs = ["."]
+
+[tool.hatch.build.targets.wheel]
+only-include = ["event_types.py"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 
 [tool.ruff.lint]

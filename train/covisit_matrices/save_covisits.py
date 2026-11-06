@@ -8,9 +8,9 @@ to save memory; here each matrix is one file). Note the reference names don't al
 match the number kept, e.g. top_40_aids_v220 keeps the top 80.
 
 Usage:
-    python save_covisits.py                          # all matrices, A100 defaults
-    python save_covisits.py --only 90 95 --engine streaming
-    python save_covisits.py --chunk 116=100000 --overwrite
+    python train/covisit_matrices/save_covisits.py   # all matrices, A100 defaults
+    python train/covisit_matrices/save_covisits.py --only 90 95 --engine streaming
+    python train/covisit_matrices/save_covisits.py --chunk 116=100000 --overwrite
 
 Engines and session chunk sizes default to what worked fastest on an A100-SXM4-80GB
 (2026-11-05, see covisitations.ipynb). Some chunk sizes are not about speed: the
