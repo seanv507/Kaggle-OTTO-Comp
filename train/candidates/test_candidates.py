@@ -211,7 +211,7 @@ def _long_sessions(n_sessions, seed):
     return base.with_columns(aid=pl.Series(rng.integers(0, 45, base.height), dtype=pl.Int32))
 
 
-MATRICES = _random_matrices(candidates.ALL_564, seed=3)
+MATRICES = _random_matrices([*candidates.ALL_564, "top20new", "top20new2"], seed=3)
 MATRIX_DICTS = _as_dicts(MATRICES)
 EVENTS_564 = pl.concat([
     _long_sessions(150, seed=4),
@@ -228,14 +228,21 @@ EVENTS_564 = pl.concat([
 POPULAR = [3, 7] + list(range(500, 598))  # 100 like the notebooks; 3 and 7 can also be candidates
 
 
-def _reference_564(target, include, branch, item_ct):
+REF_INFER = {
+    "564": ref.ALL_564,
+    "612": [*ref.ALL_564, "top20new", "top20new2"],
+    "614": ["top20new", "top20new2"],
+}
+
+
+def _reference_564(family, target, include, branch, item_ct):
     df = ref.add_d(ref.to_reference_frame(EVENTS_564))
     fn = ref.suggest_aids_564 if target == "clicks" else ref.suggest_orders_564
     pad_kw = "top_clicks" if target == "clicks" else "top_orders"
     rows = []
     for session, g in df.groupby("session"):
         aids, scores = fn(
-            g, MATRIX_DICTS, INFER=ref.ALL_564 if include is None else include, branch=branch,
+            g, MATRIX_DICTS, INFER=REF_INFER[family] if include is None else include, branch=branch,
             ITEM_CT=item_ct, **{pad_kw: POPULAR},
         )
         rows += [(session, pos, a, float(s)) for pos, (a, s) in enumerate(zip(aids, scores, strict=True))]
@@ -257,13 +264,14 @@ GPU_NO_GROUP_CUM_SUM = pytest.param(
 
 @pytest.mark.parametrize("item_ct", [50, 12])
 @pytest.mark.parametrize("engine", ["streaming", "in-memory", GPU_NO_GROUP_CUM_SUM])
-@pytest.mark.parametrize("run", candidates.RUNS_564)
-def test_suggest_564_matches_reference(run, engine, item_ct):
-    target, include, branch = candidates.RUNS_564[run]
-    expected = _reference_564(target, include, branch, item_ct)
-    n_hist_branch = expected.filter(pl.col("score") != -1).height
-    assert n_hist_branch > 0
+@pytest.mark.parametrize("run", candidates.RUNS)
+def test_suggest_matches_reference(run, engine, item_ct):
+    family, target, include, branch = candidates.RUNS[run]
+    expected = _reference_564(family, target, include, branch, item_ct)
+    # rules produced some candidates (not only history aids and padding)
+    assert expected.filter(pl.col("score") >= 0).height > 0
     result = candidates.suggest_564(
-        EVENTS_564, MATRICES, target, include=include, branch=branch, item_ct=item_ct, popular=POPULAR
+        EVENTS_564, MATRICES, target, include=include, branch=branch, item_ct=item_ct, popular=POPULAR,
+        family=family,
     ).collect(engine=_engine(engine))
     assert_frame_equal(result, expected, check_dtypes=False)

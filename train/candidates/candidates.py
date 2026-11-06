@@ -150,6 +150,7 @@ class Rule:
         n_sources: int | None = None,
         bonus: bool = False,
         truncate: bool = False,
+        when: pl.Expr | None = None,
         matrix: str | None = None,
     ):
         self.include = include
@@ -160,6 +161,7 @@ class Rule:
         self.n_sources = n_sources  # SOURCE[:n]
         self.bonus = bonus  # if i % k == 0: add the weight again
         self.truncate = truncate  # zip with a pattern list: keep i < k * (n // k)
+        self.when = when  # session condition on ln / ln2, e.g. LN == 1
 
 
 # source for model-564 suggest_aids' second-order rule:
@@ -196,6 +198,8 @@ def rule_contributions(
         )
         .join(session_info, on="session", how="left")
     )
+    if rule.when is not None:
+        rows = rows.filter(rule.when)
     if rule.truncate:
         rows = rows.filter(pl.col("i") < rule.k * (pl.col("n") // rule.k))
     rows = rows.select(
@@ -322,6 +326,25 @@ AIDS_COVISIT_564 = [
 
 ALL_564 = sorted({r.include for r in ORDERS_HISTORY_564 + ORDERS_COVISIT_564 + AIDS_HISTORY_564 + AIDS_COVISIT_564})
 
+# model-612 adds rules for sessions with one unique aid (`if len(unique_aids)==1`, source
+# `unique_aids[-1:]`): top20new2 = v701, top20new = v700. model-614 keeps only those.
+NEW2_CLICKS = Rule("top20new2", "all", 30, pattern(30), n_sources=1, truncate=True, when=LN == 1)
+NEW2_ORDERS = Rule("top20new2", "all", 20, pattern(20), n_sources=1, truncate=True, when=LN == 1)
+NEW_ORDERS = Rule("top20new", "all", 20, pattern(20), n_sources=1, truncate=True, when=LN == 1)
+
+AIDS_COVISIT_612 = [NEW2_CLICKS, *AIDS_COVISIT_564]
+ORDERS_COVISIT_612 = [*ORDERS_COVISIT_564[:5], NEW2_ORDERS, NEW_ORDERS, *ORDERS_COVISIT_564[5:]]
+AIDS_COVISIT_614 = [NEW2_CLICKS]
+ORDERS_COVISIT_614 = [NEW2_ORDERS, NEW_ORDERS]
+
+Family = Literal["564", "612", "614"]
+# family -> target -> (history-branch rules, covisit-branch rules)
+RULES: dict[str, dict[str, tuple[list[Rule], list[Rule]]]] = {
+    "564": {"clicks": (AIDS_HISTORY_564, AIDS_COVISIT_564), "orders": (ORDERS_HISTORY_564, ORDERS_COVISIT_564)},
+    "612": {"clicks": (AIDS_HISTORY_564, AIDS_COVISIT_612), "orders": (ORDERS_HISTORY_564, ORDERS_COVISIT_612)},
+    "614": {"clicks": (AIDS_HISTORY_564, AIDS_COVISIT_614), "orders": (ORDERS_HISTORY_564, ORDERS_COVISIT_614)},
+}
+
 Branch = Literal["auto", "history", "covisit"]
 Target = Literal["clicks", "orders"]
 
@@ -385,15 +408,18 @@ def suggest_564(
     branch: Branch = "auto",
     item_ct: int = 50,
     popular: list[int] | None = None,
+    family: Family = "564",
 ) -> pl.LazyFrame:
-    """model-564 `suggest_aids` (target="clicks") or `suggest_orders` (target="orders").
+    """model-564/612/614 `suggest_aids` (target="clicks") or `suggest_orders` (target="orders").
 
-    `include` is the notebook's INFER list (None: all rules, as model-564-F). Returns
+    `include` is the notebook's INFER list (None: all of the family's rules, as
+    model-564-F, 612 and 614). Returns
     `session, pos, aid, score`: item_ct rows per session, where score is what the -wgt
     notebook writes (-1 for history aids placed first in the covisit branch, -2 for
     `popular` padding).
     """
-    include_set = set(ALL_564 if include is None else include)
+    hist_rules, cov_rules = RULES[family][target]
+    include_set = {r.include for r in hist_rules + cov_rules} if include is None else set(include)
     matrices = {k: v.lazy() for k, v in matrices.items()}
     events = add_subsessions(events)
     all_aids = source_set(events, "all")
@@ -407,14 +433,14 @@ def suggest_564(
     cov_events = events.filter(~pl.col("_hist")).drop("_hist")
 
     if target == "orders":
-        hist_rules, cov_rules, start = ORDERS_HISTORY_564, ORDERS_COVISIT_564, 0.5
+        start = 0.5
         hist_extra = [
             constant_contributions(source_set(hist_events, "first_of_d"), 0.5, rule_no=1),
             constant_contributions(source_set(hist_events, "last_of_d"), 0.5, rule_no=2),
         ]
         first_rule = 3
     else:
-        hist_rules, cov_rules, start = AIDS_HISTORY_564, AIDS_COVISIT_564, 0.1
+        start = 0.1
         hist_extra = []
         first_rule = 1
 
@@ -465,26 +491,32 @@ def _pad(out: pl.LazyFrame, popular: list[int], item_ct: int) -> pl.LazyFrame:
     return pl.concat([out, padding])
 
 
-# model-564 notebooks: W_VER -> (target, INFER, branch). model-564-F (all rules, history
-# branch) runs both targets; the -wgt notebooks are the same runs' scores.
-RUNS_564: dict[str, tuple[Target, list[str] | None, Branch]] = {
-    "1": ("orders", ["top20orders"], "auto"),
-    "3": ("orders", ["top20test"], "auto"),
-    "4": ("orders", ["top20buy2buy", "top20buy2buy2"], "auto"),
-    "5": ("orders", ["top20b", "top20c"], "auto"),
-    "6": ("orders", ["top20e", "top20f"], "auto"),
-    "7": ("orders", ["top20d", "top20buy"], "auto"),
-    "20": ("orders", ["top20d", "top20buy"], "history"),
-    "21": ("orders", ["top20test"], "history"),
-    "22": ("orders", ["top20buy2buy", "top20buy2buy2"], "history"),
-    "23": ("orders", ["top20b", "top20c"], "history"),
-    "24": ("orders", ["top20d", "top20buy"], "covisit"),
-    "25": ("orders", ["top20test"], "covisit"),
-    "26": ("orders", ["top20buy2buy", "top20buy2buy2"], "covisit"),
-    "27": ("orders", ["top20b", "top20c"], "covisit"),
-    "31": ("orders", ["top20orders"], "covisit"),
-    "32": ("orders", ["top20e", "top20f"], "covisit"),
-    "33": ("clicks", ["top20"], "covisit"),
-    "F_clicks": ("clicks", None, "history"),
-    "F_orders": ("orders", None, "history"),
+# Rule-based runs, one per notebook and target: name -> (family, target, INFER, branch).
+# 564-<W_VER> are model-564-<W_VER>; model-564-F (all rules, history branch), model-612
+# and model-614 run both targets (their carts are the orders list). The -wgt notebooks
+# are the same runs' scores.
+RUNS: dict[str, tuple[Family, Target, list[str] | None, Branch]] = {
+    "564_1": ("564", "orders", ["top20orders"], "auto"),
+    "564_3": ("564", "orders", ["top20test"], "auto"),
+    "564_4": ("564", "orders", ["top20buy2buy", "top20buy2buy2"], "auto"),
+    "564_5": ("564", "orders", ["top20b", "top20c"], "auto"),
+    "564_6": ("564", "orders", ["top20e", "top20f"], "auto"),
+    "564_7": ("564", "orders", ["top20d", "top20buy"], "auto"),
+    "564_20": ("564", "orders", ["top20d", "top20buy"], "history"),
+    "564_21": ("564", "orders", ["top20test"], "history"),
+    "564_22": ("564", "orders", ["top20buy2buy", "top20buy2buy2"], "history"),
+    "564_23": ("564", "orders", ["top20b", "top20c"], "history"),
+    "564_24": ("564", "orders", ["top20d", "top20buy"], "covisit"),
+    "564_25": ("564", "orders", ["top20test"], "covisit"),
+    "564_26": ("564", "orders", ["top20buy2buy", "top20buy2buy2"], "covisit"),
+    "564_27": ("564", "orders", ["top20b", "top20c"], "covisit"),
+    "564_31": ("564", "orders", ["top20orders"], "covisit"),
+    "564_32": ("564", "orders", ["top20e", "top20f"], "covisit"),
+    "564_33": ("564", "clicks", ["top20"], "covisit"),
+    "564_F_clicks": ("564", "clicks", None, "history"),
+    "564_F_orders": ("564", "orders", None, "history"),
+    "612_clicks": ("612", "clicks", None, "covisit"),
+    "612_orders": ("612", "orders", None, "covisit"),
+    "614_clicks": ("614", "clicks", None, "covisit"),
+    "614_orders": ("614", "orders", None, "covisit"),
 }

@@ -133,6 +133,11 @@ def valid_lists(valid: pd.DataFrame) -> list[list]:
 # by the notebook's variable name: top_20 -> M["top20"], top_20_test2 -> M["top20test2"].
 # Returns (aids, scores) where scores are what the -wgt notebooks write: the Counter
 # value, -1 for history aids in the covisit branch and -2 for popular-item padding.
+#
+# model-612 / model-614 add rules for sessions with a single unique aid (marked
+# "model-612" below), under the INFER names top20new2 (v701) and top20new (v700) here:
+# 612 = all rules with branch "covisit"; 614 = INFER ["top20new", "top20new2"] only,
+# because 614 wraps every other covisit rule in `if 0:`.
 
 type_weight_multipliers = {0: 1, 1: 6, 2: 3}
 
@@ -163,6 +168,7 @@ def suggest_aids_564(df, M, INFER=ALL_564, branch="auto", ITEM_CT=50, top_clicks
     top_clicks = list(top_clicks)
     top_20, top_20b, top_20c = M.get("top20"), M.get("top20b"), M.get("top20c")
     top_20e, top_20f, top_20_test2 = M.get("top20e"), M.get("top20f"), M.get("top20test2")
+    top_20_new2 = M.get("top20new2")
 
     aids = df.aid.tolist()
     types = df.type.tolist()
@@ -203,6 +209,15 @@ def suggest_aids_564(df, M, INFER=ALL_564, branch="auto", ITEM_CT=50, top_clicks
         return _out(result, scores, top_clicks, ITEM_CT)
 
     aids_temp = Counter()
+
+    # model-612
+    weights3 = [2, 2] + [1] * 28
+    if "top20new2" in INFER and len(unique_aids) == 1:
+        aids5 = list(itertools.chain(*[top_20_new2[aid][:30] for aid in unique_aids[-1:] if aid in top_20_new2]))
+        w5 = weights3 * int(len(aids5) // 30)
+        for aid, w in zip(aids5, w5):
+            aids_temp[aid] += w
+
     if "top20" in INFER:
         aids2 = list(itertools.chain(*[top_20[aid][:20] for aid in unique_aids if aid in top_20]))
         for i, aid in enumerate(aids2):
@@ -255,6 +270,7 @@ def suggest_orders_564(df, M, INFER=ALL_564, branch="auto", ITEM_CT=50, top_orde
     top_20e, top_20f, top_20_orders = M.get("top20e"), M.get("top20f"), M.get("top20orders")
     top_20_buy2buy, top_20_buy2buy2 = M.get("top20buy2buy"), M.get("top20buy2buy2")
     top_20_test, top_20_buy = M.get("top20test"), M.get("top20buy")
+    top_20_new, top_20_new2 = M.get("top20new"), M.get("top20new2")
 
     aids = df.aid.tolist()
     types = df.type.tolist()
@@ -367,6 +383,20 @@ def suggest_orders_564(df, M, INFER=ALL_564, branch="auto", ITEM_CT=50, top_orde
         w5 = weights2 * int(len(aids5) // 55)
         for aid, w in zip(aids5, w5):
             aids_temp[aid] += w
+
+    # model-612
+    if len(unique_aids) == 1:
+        if "top20new2" in INFER:
+            aids5 = list(itertools.chain(*[top_20_new2[aid][:20] for aid in unique_aids[-1:] if aid in top_20_new2]))
+            w5 = weights3 * int(len(aids5) // 20)
+            for aid, w in zip(aids5, w5):
+                aids_temp[aid] += w
+        if "top20new" in INFER:
+            aids5 = list(itertools.chain(*[top_20_new[aid][:20] for aid in unique_aids[-1:] if aid in top_20_new]))
+            w5 = weights3 * int(len(aids5) // 20)
+            for aid, w in zip(aids5, w5):
+                aids_temp[aid] += w
+
     if "top20d" in INFER:
         aids5 = list(itertools.chain(*[top_20d[aid][:20] for aid in unique_buys[:1] if aid in top_20d]))
         w5 = weights3 * int(len(aids5) // 20)
