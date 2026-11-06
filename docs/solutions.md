@@ -4,7 +4,7 @@ The 3rd-place team (Benny, Chris, Giba and Theo) built individual models and ens
 
 ## Chris Deotte: candidate rerank, LB 0.601
 
-- Code: [cdeotte/Kaggle-OTTO-Comp](https://github.com/cdeotte/Kaggle-OTTO-Comp), local copy at `../Kaggle-OTTO-Comp`.
+- Code: [cdeotte/Kaggle-OTTO-Comp](https://github.com/cdeotte/Kaggle-OTTO-Comp); this repo is the user's fork of it.
 - [Write-up: "3rd Place - Using Only Rules Achieves LB 0.590!"](https://www.kaggle.com/competitions/otto-recommender-system/discussion/383013)
 - Base method: [candidate-rerank-model-lb-0-575](https://www.kaggle.com/code/cdeotte/candidate-rerank-model-lb-0-575)
 
