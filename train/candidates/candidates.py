@@ -186,7 +186,10 @@ TOP1 = "top1_new"
 
 def neighbours(matrix: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     """`aid, aid_y, rank` from a covisitation matrix sorted by aid, value descending,
-    aid_y (the `save_covisits.py` output): rank 0 is the reference's M[aid][0]."""
+    aid_y (the `save_covisits.py` output): rank 0 is the reference's M[aid][0].
+    A matrix that already has a `rank` column (see `ranked_matrix`) is used as is."""
+    if "rank" in matrix.lazy().collect_schema():
+        return matrix.lazy().select("aid", "aid_y", "rank")
     return (
         matrix.lazy()
         .select("aid", "aid_y")
@@ -194,6 +197,21 @@ def neighbours(matrix: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
         .with_columns(rank=(pl.col("_row") - pl.col("_row").min().over("aid")).cast(pl.UInt32))
         .drop("_row")
     )
+
+
+def ranked_matrix(matrix: pl.LazyFrame | pl.DataFrame, max_rank: int | None = None) -> pl.DataFrame:
+    """`neighbours` collected once (optionally only ranks < max_rank), to reuse across
+    rules, session chunks and runs."""
+    nbrs = neighbours(matrix)
+    if max_rank is not None:
+        nbrs = nbrs.filter(pl.col("rank") < max_rank)
+    return nbrs.collect()
+
+
+def max_rank(rules: list[Rule], matrix: str) -> int | None:
+    """The deepest neighbour any of `rules` reads from `matrix` (None: all)."""
+    ks = [r.k for r in rules if r.matrix == matrix and not r.constant]
+    return None if any(k is None for k in ks) else max(ks, default=0)
 
 
 def rule_contributions(

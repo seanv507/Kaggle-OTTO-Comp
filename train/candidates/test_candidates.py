@@ -321,3 +321,48 @@ def test_suggest_matches_reference(run, engine, item_ct):
         # rules produced some candidates (not only history aids and padding)
         assert expected.filter(pl.col("score") >= 0).height > 0
     assert_frame_equal(result, expected, check_dtypes=False)
+
+
+# ---------------------------------------------------------------------------
+# save_candidates.py end to end
+# ---------------------------------------------------------------------------
+
+
+def test_save_candidates(tmp_path, monkeypatch):
+    import save_candidates
+
+    events = tmp_path / "events.parquet"
+    EVENTS_564.write_parquet(events)
+    cov = tmp_path / "cov"
+    cov.mkdir()
+    for name, file in save_candidates.MATRIX_FILES.items():
+        MATRICES[name].write_parquet(cov / f"{file}.parquet")
+    labels = tmp_path / "labels.parquet"
+    pl.DataFrame(
+        {"session": [0, 0, 1], "type": [CLICKS, ORDERS, CARTS], "ground_truth": [[1], [2, 3], [4]]},
+        schema={"session": pl.Int32, "type": pl.UInt8, "ground_truth": pl.List(pl.Int32)},
+    ).write_parquet(labels)
+    out = tmp_path / "out"
+    runs = ["564_1", "564_F_clicks", "620", "709_orders"]
+    monkeypatch.setattr(
+        "sys.argv",
+        ["save_candidates.py", "--events", str(events), "--covisits", str(cov), "--out", str(out),
+         "--labels", str(labels), "--chunk", "700", "--only", *runs],
+    )
+    save_candidates.main()
+
+    clicks620 = pl.read_parquet(out / "620.parquet")
+    for run in runs:
+        family, target, include, branch = candidates.RUNS[run]
+        expected = candidates.suggest_564(
+            EVENTS_564, MATRICES, target, include=include, branch=branch,
+            item_ct=100 if family == "709" else 50, popular=popular_lists()[target], family=family,
+            clicks620=clicks620 if family == "709" else None,
+        ).collect()
+        assert_frame_equal(pl.read_parquet(out / f"{run}.parquet"), expected)
+
+
+def popular_lists():
+    import popular
+
+    return popular.CHRIS
