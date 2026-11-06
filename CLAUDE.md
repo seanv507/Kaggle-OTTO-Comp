@@ -54,7 +54,8 @@ Chris's notebooks keep their places and the Polars code sits beside them, except
 |---|---|
 | `train.parquet` | 216.7M events, 2022-07-31 22:00 to 2022-08-28 21:59:59 |
 | `test.parquet` | 6.9M events, 2022-08-28 22:00 to 2022-09-04 21:59:51 (the Kaggle test set) |
-| `train_train.parquet`, `train_val.parquet`, `test_full.parquet` | local train/validation split |
+| `train_train.parquet`, `train_val.parquet`, `test_full.parquet` | local train/validation split; `train_val` is week 4 **untruncated**, `test_full` is the Kaggle test week untruncated |
+| `valid_train.parquet`, `valid_test.parquet`, `valid_test_labels.parquet` | Chris's local validation: Kaggle dataset `radek1/otto-train-and-test-data-for-local-validation` (his `data/train_data/`). Weeks 1–3 (164.0M events), week 4 truncated (7.7M events, 1.80M sessions), and labels `session` Int32, `type` UInt8, `ground_truth` List(Int32). Converted from epoch seconds and string types on 2026-11-06. |
 
 Schema: `session` Int32, `aid` Int32, `ts` Datetime(ms), `type` UInt8. `test_full.parquet` uses Int64 for `session` and `aid`. Every file is sorted by `session`.
 
