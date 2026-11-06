@@ -20,13 +20,13 @@ Chris's pipeline, which runs once on train to fit models and once on all data fo
 4. merge candidates, features and targets: `train/make_parquets/`
 5. XGBoost/CatBoost rankers: `train/ranker_models/`
 
-When converting, read the matching reference notebook first. In `covisits.py`, function names map to notebook numbers. For example, `covisits.make_covisits_90` corresponds to `train/covisit_matrices/cpu-90.ipynb`, and `make_covisits_115` to `gpu-115.ipynb`.
+When converting, read the matching reference notebook first. In `covisits.py`, function names map to notebook numbers. For example, `covisits.make_covisits_90` corresponds to `train/covisit_matrices/cpu-90.ipynb`, and `make_covisits_115` to `gpu-115.ipynb`. The converted train covisit notebooks (and their driver `script.ipynb`) have been removed from this directory; read them from upstream commit `2bb8962`, e.g. `git show 2bb8962:train/covisit_matrices/cpu-90.ipynb`.
 
 ## Layout
 
-Chris's notebooks keep their places; the Polars code sits beside them. Tests (`test_*.py`) live next to the module they test.
+Chris's notebooks keep their places and the Polars code sits beside them, except in `train/covisit_matrices/`, where the converted notebooks were removed (see commit `2bb8962`). Tests (`test_*.py`) live next to the module they test.
 
-- `train/covisit_matrices/covisits.py`: covisitation matrices, one `make_covisits_<VER>` per notebook run by `train/covisit_matrices/script.ipynb`, all built through `build_covisits`. The module docstring explains the shared conventions, including which copy of a duplicate pair is kept.
+- `train/covisit_matrices/covisits.py`: covisitation matrices, one `make_covisits_<VER>` per notebook run by Chris's `train/covisit_matrices/script.ipynb` (removed; see commit `2bb8962`), all built through `build_covisits`. The module docstring explains the shared conventions, including which copy of a duplicate pair is kept.
 - `train/covisit_matrices/covisits_reference.py`: pandas ports of those notebooks, which the tests compare against.
 - `train/covisit_matrices/save_covisits.py`: computes and saves all matrices. Run it from the repo root: `uv run python train/covisit_matrices/save_covisits.py`.
 - `train/covisit_matrices/covisitations.ipynb`: exploration and timings, with benchmark results in markdown cells. It runs from its own directory, so data paths are `../../data/...`.

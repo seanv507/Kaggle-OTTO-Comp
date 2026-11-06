@@ -134,7 +134,7 @@ def _random_events(n_sessions=300, seed=0):
 
 
 def _reference_95(events: pl.DataFrame) -> pl.DataFrame:
-    """Direct pandas port of gen_pairs + weights from train/covisit_matrices/cpu-95.ipynb."""
+    """Direct pandas port of gen_pairs + weights from train/covisit_matrices/cpu-95.ipynb (commit 2bb8962)."""
     df = events.to_pandas()
     df = df.groupby("session", sort=False).tail(30)
     df = pd.merge(df, df, on="session")

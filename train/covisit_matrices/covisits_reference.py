@@ -1,7 +1,7 @@
 """Pandas ports of Chris Deotte's covisitation notebooks, used by test_covisits.py.
 
 Each `ref_<VER>` transcribes the pair-building code of
-train/covisit_matrices/{cpu,gpu}-<VER>.ipynb as literally as
+train/covisit_matrices/{cpu,gpu}-<VER>.ipynb (at upstream commit 2bb8962) as literally as
 possible, with cudf replaced by pandas. Pandas merges keep left rows in order, then right
 rows, so `drop_duplicates` (keep first) picks the copy the notebook's sort implies; on
 cudf that choice was arbitrary.

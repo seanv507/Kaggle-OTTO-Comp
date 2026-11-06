@@ -1,5 +1,5 @@
 """Compute and save all covisitation matrices, following Chris Deotte's
-train/covisit_matrices/script.ipynb (same matrices, same order).
+train/covisit_matrices/script.ipynb at upstream commit 2bb8962 (same matrices, same order).
 
 Each matrix is saved as <out>/<name>.parquet with columns aid, aid_y, value: the top
 aid_y per aid, sorted by aid, value descending, aid_y. <name> is the reference pickle's

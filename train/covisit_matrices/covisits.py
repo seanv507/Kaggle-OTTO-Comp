@@ -2,6 +2,8 @@
 
 Each `make_covisits_<VER>` converts train/covisit_matrices/{cpu,gpu}-<VER>.ipynb from
 cdeotte/Kaggle-OTTO-Comp (the notebooks run by train/covisit_matrices/script.ipynb).
+Those notebooks were removed from this repo after conversion; read them at upstream
+commit 2bb8962, e.g. `git show 2bb8962:train/covisit_matrices/cpu-90.ipynb`.
 They all return `aid, aid_y, value`: the top `top` aid_y per aid, sorted by aid,
 value descending, aid_y.
 
