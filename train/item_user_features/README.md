@@ -17,5 +17,12 @@ or the candidates.
 - `features_reference.py`: pandas transcriptions of the notebooks, which
   `test_features.py` compares against.
 
-`embeddings-for-train.ipynb` (32-d matrix factorisation embeddings of consecutive aids,
-trained with PyTorch and Merlin) is not converted yet.
+`save_embeddings.py` trains the 32-d item embeddings of `embeddings-for-train.ipynb` on
+consecutive aids of the train and test sessions (plain PyTorch instead of Merlin's loader)
+and writes `item_embed_32.npy`, indexed by aid:
+
+    uv run python train/item_user_features/save_embeddings.py --out data/item_user_features_valid
+
+An epoch takes ~36 s on the local RTX 2050 (149M pairs). `embeddings.py` explains a
+quirk it reproduces: the notebook trained one logit per coordinate product, not the dot
+product (`--dot` trains the dot product instead).
