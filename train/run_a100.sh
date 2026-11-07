@@ -34,9 +34,9 @@
 # Notifications (if NTFY_TOPIC is set): ntfy.sh on each completed step (with the candidate
 # and ranker recalls), at the end, and with high priority on failure.
 # Uploads to HF (if UPLOAD=1): the matrices after step 3; on exit, success or failure, the
-# logs, candidates, features and models (not the merged rows: set UPLOAD_ROWS=1). Then the
-# pod stops (if STOP_POD=1 and on Runpod); a stopped pod keeps /workspace and bills only
-# its storage.
+# logs (to logs/valid_run/<pod id>), candidates, features and models (not the merged rows:
+# set UPLOAD_ROWS=1). Then the pod stops (if STOP_POD=1 and on Runpod); a stopped pod keeps
+# /workspace and bills only its storage, but its GPU may be taken meanwhile.
 set -euo pipefail
 
 REPO=${REPO:-https://github.com/seanv507/Kaggle-OTTO-Comp.git}
@@ -55,6 +55,13 @@ TORCH_EXTRA=${TORCH_EXTRA:-cu132}  # uv extra for PyTorch (embeddings)
 # ntfy.sh notifications on each completed step and at exit: set NTFY_TOPIC (on Runpod,
 # NTFY_TOPIC={{ RUNPOD_SECRET_NTFY_TOPIC }}); unset, nothing is sent
 NTFY_SERVER=${NTFY_SERVER:-https://ntfy.sh}
+# Runpod's /workspace volume is a network filesystem (MooseFS), where uv's tens of thousands
+# of small writes can fail ("Stale file handle", 2026-11-07); the venv need not survive a
+# stop, so keep it and uv's cache on the container disk
+export UV_PROJECT_ENVIRONMENT=${UV_PROJECT_ENVIRONMENT:-/root/otto-venv}
+export UV_CACHE_DIR=${UV_CACHE_DIR:-/root/.cache/uv}
+# HF folder for this run's logs: one per pod, so runs on different pods do not mix
+RUN_ID=${RUN_ID:-${RUNPOD_POD_ID:-local}}
 
 export HF_XET_HIGH_PERFORMANCE=1
 LOGS=$WORK/logs
@@ -93,7 +100,7 @@ $(tail -n 5 "$LOGS/run.log" 2>/dev/null)" high
     fi
     if [ "$UPLOAD" = 1 ]; then
         # what exists so far (all of it on success); hf upload skips unchanged files
-        upload "$LOGS" logs/valid_run "Logs of the valid run (exit $status)"
+        upload "$LOGS" "logs/valid_run/$RUN_ID" "Logs of the valid run $RUN_ID (exit $status)"
         upload "$OUT/candidate_scores_valid" candidate_scores_valid "Candidates on the local-validation split (exit $status)"
         upload "$OUT/item_user_features_valid" item_user_features_valid "Item/user features and embeddings on the local-validation split (exit $status)"
         upload "$OUT/models_valid" models_valid "Rankers on the local-validation split (exit $status)"
@@ -127,7 +134,12 @@ cd "$WORK"
 [ -d Kaggle-OTTO-Comp ] || git clone --branch "$BRANCH" "$REPO"
 cd Kaggle-OTTO-Comp
 git fetch origin && git checkout "$BRANCH" && git pull --ff-only
-uv sync --extra "$TORCH_EXTRA"
+for attempt in 1 2 3; do  # retried: see UV_PROJECT_ENVIRONMENT above
+    if uv sync --extra "$TORCH_EXTRA"; then break; fi
+    if [ "$attempt" = 3 ]; then exit 1; fi
+    echo "uv sync failed (attempt $attempt), retrying"
+    sleep 10
+done
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv | tee "$LOGS/gpu.txt"
 git rev-parse HEAD | tee "$LOGS/commit.txt"
 # Polars sizes its thread pool from the host's cores; in a container with a CPU quota that
