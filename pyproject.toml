@@ -82,8 +82,11 @@ build-backend = "hatchling.build"
 
 # Editable install that puts the repo root on sys.path, so modules in
 # train/... and data/ can import shared root modules such as event_types.
+# train/covisit_matrices is on it too, so that other projects (Benny's repo, as an
+# editable uv path dependency) can `import covisits`. Not with a wheel's force-include:
+# hatch copies those files into editable installs too, and the copy then shadows edits.
 [tool.hatch.build]
-dev-mode-dirs = ["."]
+dev-mode-dirs = [".", "train/covisit_matrices"]
 
 [tool.hatch.build.targets.wheel]
 only-include = ["event_types.py"]
