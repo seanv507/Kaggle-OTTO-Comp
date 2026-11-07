@@ -104,15 +104,27 @@ uv sync --extra "$TORCH_EXTRA"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv | tee "$LOGS/gpu.txt"
 git rev-parse HEAD | tee "$LOGS/commit.txt"
 # Polars sizes its thread pool from the host's cores; in a container with a CPU quota that
-# oversubscribes (a suspect for the pod's slow candidate runs), so cap it at the quota
-if [ -z "${POLARS_MAX_THREADS:-}" ] && [ -r /sys/fs/cgroup/cpu.max ]; then
-    read -r quota period < /sys/fs/cgroup/cpu.max
-    if [ "$quota" != max ]; then
-        export POLARS_MAX_THREADS=$(( (quota + period - 1) / period ))
+# oversubscribes (a suspect for the pod's slow candidate runs), so cap it at the quota.
+# Runpod's A100 hosts use cgroup v1 (2026-11-07: cfs quota 30.1 CPUs, nproc 252).
+cpu_quota() {  # prints the quota in whole CPUs (rounded up), or nothing if unlimited
+    local quota period
+    if [ -r /sys/fs/cgroup/cpu.max ]; then  # cgroup v2
+        read -r quota period < /sys/fs/cgroup/cpu.max
+    elif [ -r /sys/fs/cgroup/cpu/cpu.cfs_quota_us ]; then  # cgroup v1
+        quota=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
+        period=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)
     fi
+    if [ -n "${quota:-}" ] && [ "$quota" != max ] && [ "$quota" -gt 0 ]; then
+        echo $(( (quota + period - 1) / period ))
+    fi
+}
+if [ -z "${POLARS_MAX_THREADS:-}" ] && [ -n "$(cpu_quota)" ]; then
+    POLARS_MAX_THREADS=$(cpu_quota)
+    export POLARS_MAX_THREADS
 fi
-{ echo "nproc $(nproc), cpu.max $(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo n/a)," \
-       "POLARS_MAX_THREADS ${POLARS_MAX_THREADS:-unset}"; free -g; df -h "$WORK"; } | tee "$LOGS/machine.txt"
+mem_limit=$(cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null | head -1)
+{ echo "nproc $(nproc), CPU quota $(cpu_quota || true), POLARS_MAX_THREADS ${POLARS_MAX_THREADS:-unset}," \
+       "memory limit ${mem_limit:-n/a} bytes (free below shows the host)"; free -g; df -h "$WORK"; } | tee "$LOGS/machine.txt"
 
 # 2. inputs (data/ is tracked, so link the files rather than the directory)
 step "2. inputs"
