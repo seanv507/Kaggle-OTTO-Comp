@@ -15,8 +15,8 @@ logged metrics (epoch 1 on the valid split: last-batch loss 0.612, in-sample acc
 `per_coordinate=False` trains the dot-product factorisation the code reads as.
 
 Other differences from the notebook:
-- Batches are drawn from a per-epoch `torch.randperm` of the pairs, which stay in CPU
-  memory as int32 (Merlin shuffled the parquet partitions).
+- Batches are drawn from a per-epoch `torch.randperm` of the pairs, kept as int32 on the
+  training device (Merlin shuffled the parquet partitions).
 - The logged loss is the epoch mean (the notebook reset its meter inside the batch loop,
   so it printed the last batch's loss).
 - Validation is optional and held out (`n_valid`); the notebook's valid_pairs.parquet
@@ -58,15 +58,29 @@ class MatrixFactorization(nn.Module):
 
 
 def _batches(pairs: torch.Tensor, batch_size: int, device, shuffle: bool, generator=None):
-    order = torch.randperm(len(pairs), generator=generator) if shuffle else torch.arange(len(pairs))
-    for i in range(0, len(pairs), batch_size):
+    """Batches of `pairs`, shuffled where they live (on the GPU when training there; the
+    generator must be on the same device)."""
+    n = len(pairs)
+    order = torch.randperm(n, generator=generator, device=pairs.device) if shuffle else torch.arange(n, device=pairs.device)
+    for i in range(0, n, batch_size):
         b = pairs[order[i : i + batch_size]].to(device, non_blocking=True).long()
         yield b[:, 0], b[:, 1]
 
 
 def _scores(model, aid1, aid2, generator):
-    neg = aid2[torch.randperm(len(aid2), generator=generator, device="cpu").to(aid2.device)]
+    neg = aid2[torch.randperm(len(aid2), generator=generator, device=aid2.device)]
     return model(aid1, aid2), model(aid1, neg)
+
+
+def _data_device(device: str, n_pairs: int, n_aids: int, dim: int) -> str:
+    """`device` if the pairs fit there beside the model, else "cpu": the int32 pairs, an
+    int64 permutation of them, and the embedding with SparseAdam's two moment tables, with
+    a 1 GB margin."""
+    if device == "cpu" or not torch.cuda.is_available():
+        return "cpu"
+    free, _ = torch.cuda.mem_get_info(torch.device(device))
+    need = n_pairs * (2 * 4 + 8) + 3 * n_aids * dim * 4 + (1 << 30)
+    return device if need < free else "cpu"
 
 
 def train_embeddings(
@@ -87,25 +101,32 @@ def train_embeddings(
     positive scores > 0.5 and a shuffled negative < 0.5, as the notebook).
     `per_coordinate`: see the module docstring."""
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-    gen = torch.Generator().manual_seed(seed)
     torch.manual_seed(seed)
     data = torch.from_numpy(pairs.select(pl.col("aid", "aid_next").cast(pl.Int32)).to_numpy())
     if n_aids is None:
         n_aids = int(data.max()) + 1
     train, valid = (data[:-n_valid], data[-n_valid:]) if n_valid else (data, None)
-    if device != "cpu":
+    data_device = _data_device(device, len(data), n_aids, dim)
+    if data_device != "cpu":
+        # the pairs (159M x 2 int32 = 1.3 GB on the valid split) live on the GPU, so batches
+        # need no CPU gather or copy: on a pod with a 14-CPU quota the CPU-side batching
+        # starved the GPU (391 s per epoch at 1% GPU use, 2026-11-07)
+        train = train.to(data_device)
+        valid = valid.to(data_device) if valid is not None else None
+    elif device != "cpu":
         train = train.pin_memory()
-
+    gen = torch.Generator(device=data_device).manual_seed(seed)  # batch order
+    gen_neg = torch.Generator(device=device).manual_seed(seed + 1)  # in-batch negatives
     model = MatrixFactorization(n_aids, dim, per_coordinate).to(device)
     optimizer = torch.optim.SparseAdam(model.parameters(), lr=lr)
     criterion = nn.BCEWithLogitsLoss()
-    logger.info(f"{len(train):,} training pairs, {n_aids:,} aids x {dim}, device {device}")
+    logger.info(f"{len(train):,} training pairs, {n_aids:,} aids x {dim}, device {device} (pairs on {data_device})")
     for epoch in range(epochs):
         t = time.perf_counter()
         model.train()
         loss_sum, n = 0.0, 0
         for aid1, aid2 in _batches(train, batch_size, device, shuffle=True, generator=gen):
-            pos, neg = _scores(model, aid1, aid2, gen)
+            pos, neg = _scores(model, aid1, aid2, gen_neg)
             output = torch.cat([pos, neg])
             targets = torch.cat([torch.ones_like(pos), torch.zeros_like(pos)])
             loss = criterion(output, targets)
@@ -116,7 +137,7 @@ def train_embeddings(
             n += len(aid1)
         msg = f"{epoch + 1:02d}: train loss {loss_sum / n:.4f} (last batch {loss.item():.4f})"
         if valid is not None:
-            msg += f", valid accuracy {accuracy(model, valid, batch_size, device, gen):.4f}"
+            msg += f", valid accuracy {accuracy(model, valid, batch_size, device, gen_neg):.4f}"
         logger.info(f"{msg} ({time.perf_counter() - t:.1f}s)")
     return model.aid_factors.weight.detach().cpu().numpy().astype("float32")
 

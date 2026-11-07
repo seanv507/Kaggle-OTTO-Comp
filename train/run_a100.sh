@@ -170,11 +170,17 @@ if [ -z "${POLARS_MAX_THREADS:-}" ] && [ -n "$(cpu_quota)" ]; then
     POLARS_MAX_THREADS=$(cpu_quota)
     export POLARS_MAX_THREADS
 fi
+# the same for OpenMP / BLAS pools (PyTorch, numpy, XGBoost): PyTorch ran 128 threads on a
+# 14-CPU quota and starved the GPU (391 s per embedding epoch at 1% GPU use, 2026-11-07)
+if [ -n "${POLARS_MAX_THREADS:-}" ]; then
+    export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$POLARS_MAX_THREADS}
+    export MKL_NUM_THREADS=${MKL_NUM_THREADS:-$POLARS_MAX_THREADS}
+fi
 mem_limit=""  # cgroup v2 or v1; only one of the files exists (a failing cat would trip set -e)
 for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes; do
     if [ -r "$f" ]; then mem_limit=$(cat "$f"); break; fi
 done
-{ echo "nproc $(nproc), CPU quota $(cpu_quota || true), POLARS_MAX_THREADS ${POLARS_MAX_THREADS:-unset}," \
+{ echo "nproc $(nproc), CPU quota $(cpu_quota || true), POLARS_MAX_THREADS ${POLARS_MAX_THREADS:-unset}, OMP_NUM_THREADS ${OMP_NUM_THREADS:-unset}," \
        "memory limit ${mem_limit:-n/a} bytes (free below shows the host)"; free -g; df -h "$WORK"; } | tee "$LOGS/machine.txt"
 
 # 2. inputs (data/ is tracked, so link the files rather than the directory)
