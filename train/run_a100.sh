@@ -112,6 +112,9 @@ $(tail -n 5 "$LOGS/run.log" 2>/dev/null)" high
         if [ "$UPLOAD_ROWS" = 1 ]; then
             upload "$OUT/train_with_features_valid" train_with_features_valid "Merged rows on the local-validation split (exit $status)"
         fi
+        # again, so run.log on HF records how the uploads above went (a failed candidates
+        # upload on 2026-11-07 left no trace: the logs had gone up first)
+        upload "$LOGS" "logs/valid_run/$RUN_ID" "Logs of the valid run $RUN_ID after the uploads (exit $status)"
     fi
     if [ "$STOP_POD" = 1 ] && [ -n "${RUNPOD_POD_ID:-}" ]; then
         if [ "$status" != 0 ] && [ "$FAIL_GRACE_MIN" -gt 0 ]; then
