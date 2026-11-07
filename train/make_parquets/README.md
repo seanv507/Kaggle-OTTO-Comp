@@ -20,11 +20,16 @@ notebooks' (the rankers take `columns[2:]` minus the target as features): 155 co
   compares against. Its docstring lists the notebook quirks that are kept.
 
 Not here:
+
 - Step H (`Make-172-H`, `Make-174-H`): the clicks ranker's out-of-fold predictions as the
   feature `click_oof`. It needs the trained XGB-186 models, so it belongs with
-  train/ranker_models.
-- Giba's embeddings. Step G uses `embbedings_fm10.npy` from Giba's code ([here][1]) if
+  train/ranker_models; its notebooks stay here until then.
+- Giba's embeddings. Step G uses `embbedings_fm10.npy` from [Giba's code][1] if
   given with `--giba-embed`; without it, like the notebooks, it falls back to
   `item_embed_32.npy` (Chris notes this scores slightly lower CV and LB).
 
 [1]: https://github.com/titericz/otto2023_giba
+
+Chris's other notebooks here (Make-152-A..E, A2..E2, split-users, Make-172/174-A..G and
+the drivers `script-1/2.ipynb`) were removed after conversion. Read them at upstream
+commit `2bb8962`, e.g. `git show 2bb8962:train/make_parquets/Make-152-B.ipynb`.

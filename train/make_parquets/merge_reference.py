@@ -1,7 +1,8 @@
 """Pandas ports of Chris Deotte's Make-152/172/174 notebooks (steps A-G), used by
 test_merge.py.
 
-Transcribed as literally as possible from train/make_parquets/*.ipynb (cuDF -> pandas,
+Transcribed as literally as possible from train/make_parquets/*.ipynb (removed after
+conversion except step H; read them at upstream commit 2bb8962; cuDF -> pandas,
 cupy -> numpy). Deliberate changes:
 - Candidates come from save_candidates.py's long files (session, pos, aid, score) instead
   of the submission CSV pairs, so the notebooks' explode / np.tile(np.arange(100)) /

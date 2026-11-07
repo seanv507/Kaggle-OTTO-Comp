@@ -18,9 +18,9 @@ This code ran successfully on 20xCPU 256GB and 1xGPU 32GB. Using less memory may
 * => compute co-visit matrices by running `/train/covisit_matrices/save_covisits.py` (Polars port; the original notebooks are at commit `2bb8962`)
 * => generate candidates and scores with `/train/candidates/save_candidates.py` (Polars port; the original notebooks are at commit `2bb8962`)
 * => engineer features with `/train/item_user_features/save_features.py` and `save_embeddings.py` (Polars/PyTorch port; the original notebooks are at commit `2bb8962`)
-* => merge candidates and features for click model with `/train/make_parquets/script-1.ipynb`
+* => merge candidates and features for all three models with `/train/make_parquets/save_merged.py` (Polars port of `script-1/2.ipynb`, steps A-G; the originals are at commit `2bb8962`)
 * => train click model with `/train/ranker_model/XGB-186-CLICKS.ipynb`
-* => merge candidates and features for cart and order model with `/train/make_parquets/script-2.ipynb`
+* => add the click model's predictions to the cart and order rows with `/train/make_parquets/Make-172-H.ipynb` and `Make-174-H.ipynb` (not ported yet)
 * => train cart model with `/train/ranker_model/XGB-406-CARTS.ipynb`
 * => train order model with `/train/ranker_model/XGB-412-ORDERS.ipynb`
 * **(3) Infer Models**
