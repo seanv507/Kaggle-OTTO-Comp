@@ -20,3 +20,6 @@ rows (step H of Make-172/174, formerly `train/make_parquets/Make-17x-H.ipynb`).
 
 The CatBoost notebooks (`CAT-200-orders.ipynb`, `CAT-203-carts.ipynb`) are not ported:
 Chris's LB inference uses the XGBoost models only.
+
+The XGB notebooks (and Make-172/174-H) were removed after conversion. Read them at
+upstream commit `2bb8962`, e.g. `git show 2bb8962:train/ranker_models/XGB-186-CLICKS.ipynb`.
