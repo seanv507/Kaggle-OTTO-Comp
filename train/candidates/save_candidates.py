@@ -19,6 +19,7 @@ cumulative sum the GPU engine lacks, so this runs on the CPU engines.
 """
 
 import argparse
+import resource
 import time
 from pathlib import Path
 
@@ -126,7 +127,9 @@ def main() -> None:
     parser.add_argument("--popular", choices=["chris", "events"], default="chris",
                         help="padding lists: Chris's literals (local validation) or computed from --events")
     parser.add_argument("--engine", choices=["in-memory", "streaming"], default="in-memory")
-    parser.add_argument("--chunk", type=int, help="sessions per chunk (default: all at once)")
+    parser.add_argument("--chunk", type=int,
+                        help="session-id range per chunk (default: all at once). Peak memory grows "
+                             "~85 KB per session for the largest runs (564_F_orders, 612_orders)")
     parser.add_argument("--sessions", type=int, help="only the first N sessions (smoke tests)")
     parser.add_argument("--overwrite", action="store_true", help="recompute runs that already exist")
     args = parser.parse_args()
@@ -172,7 +175,11 @@ def main() -> None:
                 for chunk in session_chunks(events, args.chunk)
             ]
             pl.concat(parts).write_parquet(path)
-            logger.info(f"{run}: {sum(p.height for p in parts):,} rows in {time.perf_counter() - t:.1f}s")
+            peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20  # KiB -> GiB
+            logger.info(
+                f"{run}: {sum(p.height for p in parts):,} rows in {time.perf_counter() - t:.1f}s"
+                f" (process peak RSS so far {peak:.1f} GiB)"
+            )
         if labels is not None:
             cands = pl.read_parquet(path)
             scores = {TYPE_NAMES[ty]: recall(cands, labels, ty) for ty in LABEL_TYPES[target]}

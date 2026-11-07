@@ -22,8 +22,8 @@
 #   1. clone/update the repo, uv sync
 #   2. download local_valid/ (valid_train, valid_test, valid_test_labels) from HF
 #   3. save_covisits.py on valid_train + valid_test  -> data/covisit_matrices_valid
-#   4. save_candidates.py on valid_test, with recall -> data/candidate_scores_valid
-#   5. upload both output folders and the logs to HF
+#   4. save_candidates.py on valid_test, with recall -> data/candidate_scores_valid (chunked)
+#   5. upload: the matrices after step 3; candidates (even partial) and logs on exit
 # On exit, success or failure: upload the logs (if UPLOAD=1) and stop the pod (if
 # STOP_POD=1 and on Runpod). A stopped pod keeps /workspace and bills only its storage.
 set -euo pipefail
@@ -34,6 +34,9 @@ HF_DATASET=${HF_DATASET:-seanv507/kaggle-otto-multi-objective}
 WORK=${WORK:-/workspace}
 UPLOAD=${UPLOAD:-1}  # 0: keep the outputs on the pod only
 STOP_POD=${STOP_POD:-1}  # 0: leave the pod running at the end (e.g. to inspect it)
+# session ids per save_candidates chunk: unchunked, 564_F_orders needs ~150 GB RAM on the
+# 1.8M valid_test sessions (it was OOM-killed on 2026-11-06); 250k keeps it near 20 GB
+CHUNK=${CHUNK:-250000}
 
 export HF_XET_HIGH_PERFORMANCE=1
 LOGS=$WORK/logs
@@ -54,6 +57,13 @@ on_exit() {
     if [ "$UPLOAD" = 1 ]; then
         hf upload "$HF_DATASET" "$LOGS" logs/valid_run --repo-type dataset \
             --commit-message "Logs of the valid run (exit $status)" || echo "log upload failed"
+        # the runs finished so far (all of them on success); hf upload skips unchanged files
+        local cands=$WORK/Kaggle-OTTO-Comp/data/candidate_scores_valid
+        if [ -d "$cands" ]; then
+            hf upload "$HF_DATASET" "$cands" candidate_scores_valid --repo-type dataset \
+                --commit-message "Candidates on the local-validation split (exit $status)" \
+                || echo "candidate upload failed"
+        fi
     fi
     if [ "$STOP_POD" = 1 ] && [ -n "${RUNPOD_POD_ID:-}" ]; then
         echo "stopping pod $RUNPOD_POD_ID"
@@ -82,18 +92,16 @@ done
 uv run python train/covisit_matrices/save_covisits.py \
     --train data/valid_train.parquet --test data/valid_test.parquet \
     --out data/covisit_matrices_valid 2>&1 | tee -a "$LOGS/covisits_valid.log"
-
-# 4. candidates + recall (existing runs are skipped, recall is still printed)
-uv run python train/candidates/save_candidates.py \
-    --events data/valid_test.parquet --covisits data/covisit_matrices_valid \
-    --out data/candidate_scores_valid --labels data/valid_test_labels.parquet \
-    2>&1 | tee -a "$LOGS/candidates_valid.log"
-
-# 5. outputs
+# upload now, so a failure in step 4 does not lose them (unchanged files are skipped)
 if [ "$UPLOAD" = 1 ]; then
     hf upload "$HF_DATASET" data/covisit_matrices_valid covisit_matrices_valid --repo-type dataset \
         --commit-message "Covisitation matrices on the local-validation split ($(cat "$LOGS/commit.txt"))"
-    hf upload "$HF_DATASET" data/candidate_scores_valid candidate_scores_valid --repo-type dataset \
-        --commit-message "Candidates on the local-validation split ($(cat "$LOGS/commit.txt"))"
 fi
+
+# 4. candidates + recall (existing runs are skipped, recall is still printed);
+#    the exit trap uploads data/candidate_scores_valid, complete or not
+uv run python train/candidates/save_candidates.py \
+    --events data/valid_test.parquet --covisits data/covisit_matrices_valid \
+    --out data/candidate_scores_valid --labels data/valid_test_labels.parquet \
+    --chunk "$CHUNK" 2>&1 | tee -a "$LOGS/candidates_valid.log"
 echo "done: recall per run is in $LOGS/candidates_valid.log"
