@@ -149,7 +149,10 @@ if [ -z "${POLARS_MAX_THREADS:-}" ] && [ -n "$(cpu_quota)" ]; then
     POLARS_MAX_THREADS=$(cpu_quota)
     export POLARS_MAX_THREADS
 fi
-mem_limit=$(cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null | head -1)
+mem_limit=""  # cgroup v2 or v1; only one of the files exists (a failing cat would trip set -e)
+for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes; do
+    if [ -r "$f" ]; then mem_limit=$(cat "$f"); break; fi
+done
 { echo "nproc $(nproc), CPU quota $(cpu_quota || true), POLARS_MAX_THREADS ${POLARS_MAX_THREADS:-unset}," \
        "memory limit ${mem_limit:-n/a} bytes (free below shows the host)"; free -g; df -h "$WORK"; } | tee "$LOGS/machine.txt"
 
@@ -177,7 +180,7 @@ run train/candidates/save_candidates.py \
     --events data/valid_test.parquet --covisits data/covisit_matrices_valid \
     --out data/candidate_scores_valid --labels data/valid_test_labels.parquet \
     --chunk "$CHUNK" 2>&1 | tee -a "$LOGS/candidates_valid.log"
-DETAIL=$(grep -E "(709_[a-z]+|564_F_[a-z]+): recall" "$LOGS/candidates_valid.log" | sed 's/.* - //' | sort -u)
+DETAIL=$(grep -E "(709_[a-z]+|564_F_[a-z]+): recall" "$LOGS/candidates_valid.log" | sed 's/.* - //' | sort -u || true)
 
 # 5. item and user features (existing files are skipped)
 step "5. features"
@@ -206,6 +209,6 @@ run train/ranker_models/train_rankers.py \
     --rows data/train_with_features_valid --labels data/valid_test_labels.parquet \
     --out data/models_valid 2>&1 | tee -a "$LOGS/rankers_valid.log"
 
-grep -hE "recall@20|score " "$LOGS/rankers_valid.log" | sed 's/.* - //' | tee "$LOGS/summary.txt"
+{ grep -hE "recall@20|score " "$LOGS/rankers_valid.log" || true; } | sed 's/.* - //' | tee "$LOGS/summary.txt"
 DETAIL=$(cat "$LOGS/summary.txt")
 step "done"
