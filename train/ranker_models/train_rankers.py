@@ -73,10 +73,10 @@ def main() -> None:
             src = rows_dir / f"train_v{model}"
         else:
             src = add_click_oof(rows_dir, model, out / "clicks", device, args.overwrite)
-        rows = pl.read_parquet(src)
-        logger.info(f"{target}: {rows.height:,} rows x {rows.width} columns from {src}, device {device}")
+        parts = sorted(src.glob("part-*.parquet"))
+        logger.info(f"{target}: {len(parts)} parts from {src}, device {device}")
         oof = rankers.train(
-            rows, target, out / target, device=device, n_folds=args.folds,
+            parts, target, out / target, device=device, n_folds=args.folds,
             neg_frac=0.4 if target == "clicks" else None, num_boost_round=args.rounds,
             early_stopping_rounds=args.early_stopping,
         )

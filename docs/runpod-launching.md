@@ -1,8 +1,8 @@
 # Launching Runpod pods: from Claude or over SSH?
 
 *Saved from a Claude Code answer, 2026-11-06. Update since then: the self-stop and the
-start-command launch are now in [train/candidates/run_a100.sh](../train/candidates/run_a100.sh)
-(commit `9718895`); its header has the exact start command.*
+start-command launch are now in [train/run_a100.sh](../train/run_a100.sh)
+(added in commit `9718895`, then moved there when it grew into the whole train pipeline); its header has the exact start command.*
 
 Do both, but for different jobs. Start and stop pods from Claude. For a batch run, have the
 pod run the script itself rather than typing it over SSH.

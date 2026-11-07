@@ -8,8 +8,8 @@ one parquet file per run of Chris Deotte's original notebooks. Run it from the r
         --out data/candidate_scores_valid --labels data/valid_test_labels.parquet --chunk 250000
 
 `--labels` prints the recall of each run. `--chunk` bounds memory: unchunked, the largest
-runs (564_F_orders, 612_orders) need ~85 KB per session. `run_a100.sh` runs the matrices and
-the candidates on the local-validation split on a cloud GPU pod.
+runs (564_F_orders, 612_orders) need ~85 KB per session. `train/run_a100.sh` runs the whole
+train pipeline on the local-validation split on a cloud GPU pod.
 
 - `candidates.py`: the rules of the five notebook families (564, 612/614, 620, 709) as
   Polars joins, and `RUNS`, one entry per notebook. Scores are summed in the notebooks'

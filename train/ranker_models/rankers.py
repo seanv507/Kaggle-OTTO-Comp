@@ -18,7 +18,8 @@ file order, as the notebooks.
 Differences from the notebooks:
 - XGBoost 3: `tree_method='hist'` with `device`, `QuantileDMatrix` (the valid matrix
   shares the train bins), and predictions use the best early-stopping iteration.
-- clicks negatives are sampled from all rows at once (seeded), not per part A/B.
+- clicks negatives are sampled per merged part (seeded), as the notebook sampled its parts
+  A/B; the parts are read one at a time and the fold matrices built in batches.
 - clicks recall is reported twice: on the sampled rows (as the notebook, optimistic: each
   session's positives compete with 40% of its negatives) and on all rows.
 The CatBoost notebooks (CAT-200/203) are not ported: the LB inference uses XGBoost only.
@@ -72,12 +73,6 @@ def sample_negatives(y: np.ndarray, frac: float, seed: int = 42) -> np.ndarray:
     return np.sort(np.concatenate([np.flatnonzero(y == 1), picked]))
 
 
-def group_sizes(users: np.ndarray) -> np.ndarray:
-    """Row counts of consecutive runs of the same user (rows are grouped by user)."""
-    starts = np.flatnonzero(np.r_[True, users[1:] != users[:-1]])
-    return np.diff(np.r_[starts, len(users)])
-
-
 def folds(users: np.ndarray, n_folds: int = 5) -> list[tuple[np.ndarray, np.ndarray]]:
     """sklearn's GroupKFold by user, as the notebooks."""
     return list(GroupKFold(n_splits=n_folds).split(np.zeros(len(users)), groups=users))
@@ -97,12 +92,56 @@ def recall_at_20(pred: pl.DataFrame, labels: pl.DataFrame, target: str) -> float
     return hits / total
 
 
-def _matrix(X, y, users, ref=None):
-    return xgb.QuantileDMatrix(X, label=y, group=group_sizes(users), max_bin=256, ref=ref)
+class _Batches(xgb.DataIter):
+    """Rows `idx` of X / y / qid in batches, so a fold's matrix never copies all its rows
+    (the notebooks' IterLoadForDMatrix)."""
+
+    def __init__(self, X, y, qid, idx, batch_size: int = 1 << 20):
+        self.X, self.y, self.qid, self.idx, self.batch_size = X, y, qid, idx, batch_size
+        self.it = 0
+        super().__init__()
+
+    def reset(self):
+        self.it = 0
+
+    def next(self, input_data):
+        a = self.it * self.batch_size
+        if a >= len(self.idx):
+            return False
+        i = self.idx[a : a + self.batch_size]
+        input_data(data=self.X[i], label=self.y[i], qid=self.qid[i])
+        self.it += 1
+        return True
+
+
+def load_training_rows(parts: list[Path], target: str, neg_frac: float | None, seed: int = 42):
+    """The training sample of `parts` (all positives and `neg_frac` of each part's
+    negatives, as the notebook sampled each of its parts A/B; all rows if None).
+
+    Returns features, X (float32), y, users, and per part the kept row indices. Two
+    passes (the target column first) so X is allocated once."""
+    keep = []
+    for k, path in enumerate(parts):
+        y = pl.read_parquet(path, columns=[target])[target].to_numpy()
+        keep.append(sample_negatives(y, neg_frac, seed + k) if neg_frac else np.arange(len(y)))
+    features = feature_columns(pl.read_parquet_schema(parts[0]).names(), target)
+    n = sum(len(k) for k in keep)
+    X = np.empty((n, len(features)), dtype=np.float32)
+    y = np.empty(n, dtype=np.int8)
+    users = np.empty(n, dtype=np.int32)
+    a = 0
+    for path, idx in zip(parts, keep, strict=True):
+        df = pl.read_parquet(path)[idx]
+        b = a + len(idx)
+        X[a:b] = df.select(features).to_numpy()
+        y[a:b] = df[target].to_numpy()
+        users[a:b] = df["user"].to_numpy()
+        a = b
+    return features, X, y, users, keep
 
 
 def train(
-    rows: pl.DataFrame,
+    parts: list[Path],
     target: str,
     out: Path,
     device: str = "cpu",
@@ -113,45 +152,63 @@ def train(
     verbose_eval: int | bool = 100,
     seed: int = 42,
 ) -> pl.DataFrame:
-    """Train the fold models into `out` and return the out-of-fold predictions
-    `user, item, p, sampled` for every row (`sampled`: the row was in the training sample).
+    """Train the fold models on the merged rows in `parts` (sorted by user across parts)
+    into `out`, and return the out-of-fold predictions `user, item, p, sampled` for every
+    row (`sampled`: the row was in the training sample).
 
     Writes fold<k>.ubj, valid_users_f<k>.npy, features.json and importance.csv."""
     out.mkdir(parents=True, exist_ok=True)
-    features = feature_columns(rows.columns, target)
+    features, X, y, users, keep = load_training_rows(parts, target, neg_frac, seed)
     (out / "features.json").write_text(json.dumps(features))
-    users = rows["user"].to_numpy()
-    y = rows[target].to_numpy()
-    sampled = sample_negatives(y, neg_frac, seed) if neg_frac else np.arange(len(rows))
-    X = rows.select(features).to_numpy().astype(np.float32, copy=False)
-    oof = np.zeros(len(rows), dtype=np.float32)
-    gains = []
-    for fold, (tr, va) in enumerate(folds(users[sampled], n_folds)):
+    logger.info(f"{target}: training sample {len(y):,} rows x {len(features)} features")
+    models, gains = [], []
+    for fold, (tr, va) in enumerate(folds(users, n_folds)):
         t = time.perf_counter()
-        tr, va = sampled[tr], sampled[va]
-        valid_users = np.unique(users[va])
-        np.save(out / f"valid_users_f{fold}.npy", valid_users)
-        dtrain = _matrix(X[tr], y[tr], users[tr])
-        dvalid = _matrix(X[va], y[va], users[va], ref=dtrain)
+        np.save(out / f"valid_users_f{fold}.npy", np.unique(users[va]))
+        dtrain = xgb.QuantileDMatrix(_Batches(X, y, users, tr), max_bin=256)
+        dvalid = xgb.QuantileDMatrix(_Batches(X, y, users, va), max_bin=256, ref=dtrain)
         model = xgb.train(
             params(target, device, seed), dtrain, num_boost_round=num_boost_round,
             evals=[(dtrain, "train"), (dvalid, "valid")],
             early_stopping_rounds=early_stopping_rounds, verbose_eval=verbose_eval,
         )
         model.save_model(out / f"fold{fold}.ubj")
+        models.append(model)
         gains.append(model.get_score(importance_type="gain"))
-        # predict every row of the held-out sessions (sampled or not)
-        rows_va = np.flatnonzero(np.isin(users, valid_users))
-        oof[rows_va] = predict(model, X[rows_va])
         logger.info(f"{target} fold {fold}: best iteration {model.best_iteration}, "
                     f"valid map {model.best_score:.5f} ({time.perf_counter() - t:.0f}s)")
+        del dtrain, dvalid
+    del X
     imp = pl.DataFrame({"feature": features}).with_columns(
         pl.Series(f"gain_{k}", [g.get(f, 0.0) for f in features]) for k, g in enumerate(gains)
     ).with_columns(gain=pl.mean_horizontal(pl.exclude("feature"))).sort("gain", descending=True)
     imp.write_csv(out / "importance.csv")
-    in_sample = np.zeros(len(rows), dtype=bool)
-    in_sample[sampled] = True
-    return rows.select("user", "item").with_columns(p=pl.Series(oof), sampled=pl.Series(in_sample))
+    return out_of_fold(parts, out, models, features, keep)
+
+
+def out_of_fold(parts, out: Path, models, features, keep) -> pl.DataFrame:
+    """Every row of `parts` (sampled or not) scored by the model of its session's fold."""
+    fold_users = [np.load(out / f"valid_users_f{k}.npy") for k in range(len(models))]
+    all_users = np.concatenate(fold_users)
+    fold_of = np.concatenate([np.full(len(u), k) for k, u in enumerate(fold_users)])
+    order = np.argsort(all_users)
+    all_users, fold_of = all_users[order], fold_of[order]
+    res = []
+    for path, idx in zip(parts, keep, strict=True):
+        df = pl.read_parquet(path, columns=["user", "item", *features])
+        users = df["user"].to_numpy()
+        pos = np.clip(np.searchsorted(all_users, users), 0, len(all_users) - 1)
+        fold = np.where(all_users[pos] == users, fold_of[pos], -1)  # -1: session not trained on
+        X = df.select(features).to_numpy().astype(np.float32, copy=False)
+        p = np.zeros(len(df), dtype=np.float32)
+        for k, model in enumerate(models):
+            m = fold == k
+            if m.any():
+                p[m] = predict(model, X[m])
+        sampled = np.zeros(len(df), dtype=bool)
+        sampled[idx] = True
+        res.append(df.select("user", "item").with_columns(p=pl.Series(p), sampled=pl.Series(sampled)))
+    return pl.concat(res)
 
 
 def predict(model: xgb.Booster, X: np.ndarray) -> np.ndarray:
