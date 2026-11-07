@@ -10,8 +10,8 @@
 # (/workspace) so outputs survive a stop.
 #
 # As the pod's start command (preferred: no SSH needed, the pod stops itself at the end).
-# Set the env var HF_TOKEN={{ RUNPOD_SECRET_hf_token }} (a Runpod secret) and the start
-# command to:
+# Set the env vars HF_TOKEN={{ RUNPOD_SECRET_HF_TOKEN }} and NTFY_TOPIC={{ RUNPOD_SECRET_NTFY_TOPIC }}
+# (Runpod secrets) and the start command to:
 #   bash -c '(/start.sh >/workspace/start.log 2>&1 &); mkdir -p /workspace/logs; curl -sSL https://raw.githubusercontent.com/seanv507/Kaggle-OTTO-Comp/ranker_models/train/run_a100.sh | bash 2>&1 | tee -a /workspace/logs/run.log; sleep infinity'
 # /start.sh (in Runpod's images) keeps SSH and Jupyter available for debugging; `sleep
 # infinity` stops a failed script from restart-looping the container if the self-stop
@@ -31,6 +31,8 @@
 #   6. save_embeddings.py                             -> .../item_embed_32.npy
 #   7. save_merged.py                                 -> data/train_with_features_valid
 #   8. train_rankers.py, with recall@20 and the score -> data/models_valid
+# Notifications (if NTFY_TOPIC is set): ntfy.sh on each completed step (with the candidate
+# and ranker recalls), at the end, and with high priority on failure.
 # Uploads to HF (if UPLOAD=1): the matrices after step 3; on exit, success or failure, the
 # logs, candidates, features and models (not the merged rows: set UPLOAD_ROWS=1). Then the
 # pod stops (if STOP_POD=1 and on Runpod); a stopped pod keeps /workspace and bills only
@@ -50,6 +52,9 @@ CHUNK=${CHUNK:-250000}
 # session ids per merged part: ~3.3 GB RAM per 20k sessions on a local sample, so ~35 GB
 MERGE_CHUNK=${MERGE_CHUNK:-200000}
 TORCH_EXTRA=${TORCH_EXTRA:-cu132}  # uv extra for PyTorch (embeddings)
+# ntfy.sh notifications on each completed step and at exit: set NTFY_TOPIC (on Runpod,
+# NTFY_TOPIC={{ RUNPOD_SECRET_NTFY_TOPIC }}); unset, nothing is sent
+NTFY_SERVER=${NTFY_SERVER:-https://ntfy.sh}
 
 export HF_XET_HIGH_PERFORMANCE=1
 LOGS=$WORK/logs
@@ -64,6 +69,12 @@ upload() {  # upload <local dir> <path in the dataset> <message>
     hf upload "$HF_DATASET" "$1" "$2" --repo-type dataset --commit-message "$3" || echo "upload of $1 failed"
 }
 
+notify() {  # notify <message> [priority]
+    [ -n "${NTFY_TOPIC:-}" ] || return 0
+    curl -fsS -m 15 -o /dev/null -H "Title: OTTO valid run${RUNPOD_POD_ID:+ ($RUNPOD_POD_ID)}" \
+        -H "Priority: ${2:-default}" -d "$1" "$NTFY_SERVER/$NTFY_TOPIC" || echo "ntfy failed"
+}
+
 stop_pod() {
     # runpodctl and RUNPOD_POD_ID are provided inside Runpod pods
     command -v runpodctl >/dev/null || { echo "runpodctl not found: stop the pod yourself"; return; }
@@ -74,6 +85,12 @@ stop_pod() {
 on_exit() {
     local status=$?
     echo "run_a100.sh exited with status $status at $(date -u +%FT%TZ)" | tee -a "$LOGS/status.txt"
+    if [ "$status" = 0 ]; then
+        notify "Finished: $(cat "$LOGS/summary.txt" 2>/dev/null || echo 'no summary')"
+    else
+        notify "FAILED (exit $status) in step '${STEP:-?}' after $(( (SECONDS - STEP_T0) / 60 )) min. Last lines:
+$(tail -n 5 "$LOGS/run.log" 2>/dev/null)" high
+    fi
     if [ "$UPLOAD" = 1 ]; then
         # what exists so far (all of it on success); hf upload skips unchanged files
         upload "$LOGS" logs/valid_run "Logs of the valid run (exit $status)"
@@ -91,7 +108,17 @@ on_exit() {
 }
 trap on_exit EXIT
 
-step() { echo "=== $* ($(date -u +%T))" | tee -a "$LOGS/steps.txt"; }
+# step <name>: log the start of a step and notify that the previous one completed (with its
+# duration and DETAIL, if a step set it)
+STEP="" STEP_T0=$SECONDS DETAIL=""
+step() {
+    if [ -n "$STEP" ]; then
+        notify "Done: $STEP in $(( (SECONDS - STEP_T0) / 60 )) min${DETAIL:+
+$DETAIL}"
+    fi
+    STEP=$* STEP_T0=$SECONDS DETAIL=""
+    echo "=== $* ($(date -u +%T))" | tee -a "$LOGS/steps.txt"
+}
 
 # 1. code
 step "1. code"
@@ -150,6 +177,7 @@ run train/candidates/save_candidates.py \
     --events data/valid_test.parquet --covisits data/covisit_matrices_valid \
     --out data/candidate_scores_valid --labels data/valid_test_labels.parquet \
     --chunk "$CHUNK" 2>&1 | tee -a "$LOGS/candidates_valid.log"
+DETAIL=$(grep -E "(709_[a-z]+|564_F_[a-z]+): recall" "$LOGS/candidates_valid.log" | sed 's/.* - //' | sort -u)
 
 # 5. item and user features (existing files are skipped)
 step "5. features"
@@ -178,5 +206,6 @@ run train/ranker_models/train_rankers.py \
     --rows data/train_with_features_valid --labels data/valid_test_labels.parquet \
     --out data/models_valid 2>&1 | tee -a "$LOGS/rankers_valid.log"
 
+grep -hE "recall@20|score " "$LOGS/rankers_valid.log" | sed 's/.* - //' | tee "$LOGS/summary.txt"
+DETAIL=$(cat "$LOGS/summary.txt")
 step "done"
-grep -hE "recall@20|score " "$LOGS/rankers_valid.log" | tee "$LOGS/summary.txt"
