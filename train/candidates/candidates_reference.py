@@ -1,8 +1,8 @@
 # ruff: noqa: B905, B007  (transcribed loops: zip truncation is part of the semantics)
 """Pandas ports of Chris Deotte's candidate notebooks, used by test_candidates.py.
 
-Code is transcribed from train/candidates/*.ipynb (also at upstream commit 2bb8962) as
-literally as possible. Deliberate changes:
+Code is transcribed as literally as possible from train/candidates/*.ipynb (removed
+after conversion; read them at upstream commit 2bb8962). Deliberate changes:
 - `sort_values('ts', ascending=False)` uses kind='stable', so ties in ts always keep
   the earliest row (the notebooks' default quicksort only does that on short sessions).
 - Input `ts` is epoch seconds, as in the reference; use `to_reference_frame`.

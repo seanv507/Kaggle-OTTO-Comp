@@ -24,12 +24,13 @@ When converting, read the matching reference notebook first. In `covisits.py`, f
 
 ## Layout
 
-Chris's notebooks keep their places and the Polars code sits beside them, except in `train/covisit_matrices/`, where the converted notebooks were removed (see commit `2bb8962`). Tests (`test_*.py`) live next to the module they test.
+Chris's notebooks keep their places and the Polars code sits beside them, except in `train/covisit_matrices/` and `train/candidates/`, where the converted notebooks were removed (see commit `2bb8962`). Tests (`test_*.py`) live next to the module they test.
 
 - `train/covisit_matrices/covisits.py`: covisitation matrices, one `make_covisits_<VER>` per notebook run by Chris's `train/covisit_matrices/script.ipynb` (removed; see commit `2bb8962`), all built through `build_covisits`. The module docstring explains the shared conventions, including which copy of a duplicate pair is kept.
 - `train/covisit_matrices/covisits_reference.py`: pandas ports of those notebooks, which the tests compare against.
 - `train/covisit_matrices/save_covisits.py`: computes and saves all matrices. Run it from the repo root: `uv run python train/covisit_matrices/save_covisits.py`.
 - `train/covisit_matrices/covisitations.ipynb`: exploration and timings, with benchmark results in markdown cells. It runs from its own directory, so data paths are `../../data/...`.
+- `train/candidates/candidates.py`: candidate lists and scores, the rules of Chris's model-564/612/614/620/709 notebooks (removed; see commit `2bb8962`) as Polars joins, one `RUNS` entry per notebook. Exact parity with the notebooks' `Counter` order needs a per-group cumulative sum, so it runs on the CPU engines only. `candidates_reference.py` holds the pandas ports the tests compare against; `save_candidates.py` is the driver (use `--chunk`: unchunked, the largest runs need ~85 KB RAM per session); `run_a100.sh` runs matrices and candidates on a cloud pod.
 - `data/labels.py`, `data/testset.py`: ground-truth labels and the train/test split (being converted to Polars), the counterpart of `data/make_train_valid.ipynb`.
 - `event_types.py` (root): integer codes for the `type` column, shared by all stages.
 - `diary.md`: the user's working notes.

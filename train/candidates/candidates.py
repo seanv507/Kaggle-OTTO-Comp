@@ -1,7 +1,9 @@
 """Candidate generation from Chris Deotte's part of the 3rd place OTTO solution.
 
-Converts the rule-based `suggest_aids` / `suggest_orders` notebooks in train/candidates/
-(model-564-*, model-612/614/620/709, run by script.ipynb). The notebooks loop over
+Converts the rule-based `suggest_aids` / `suggest_orders` notebooks of train/candidates/
+(model-564-*, model-612/614/620/709, run by script.ipynb; removed after conversion,
+read them at upstream commit 2bb8962, e.g.
+`git show 2bb8962:train/candidates/model-564-1.ipynb`). The notebooks loop over
 sessions in Python, summing covisitation neighbours of a session's aids into a
 `Counter`; here each rule is a join of a session's "source" aids with a covisitation
 matrix.

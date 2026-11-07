@@ -1,5 +1,6 @@
 """Generate and save candidate lists and scores, following Chris Deotte's
-train/candidates/script.ipynb (the model-564/612/614/620/709 notebooks).
+train/candidates/script.ipynb (the model-564/612/614/620/709 notebooks; removed after
+conversion, read them at upstream commit 2bb8962).
 
 Each run in `candidates.RUNS` is saved as <out>/<run>.parquet with columns
 session, pos, aid, score: ITEM_CT rows per session in the notebook's order, where score
