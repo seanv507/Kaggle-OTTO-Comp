@@ -46,6 +46,9 @@ WORK=${WORK:-/workspace}
 UPLOAD=${UPLOAD:-1}  # 0: keep the outputs on the pod only
 UPLOAD_ROWS=${UPLOAD_ROWS:-0}  # 1: also upload the merged rows (~60 GB)
 STOP_POD=${STOP_POD:-1}  # 0: leave the pod running at the end (e.g. to inspect it)
+# after a failure, wait this long before stopping the pod: a stopped pod's GPU is soon taken
+# by another renter (twice on 2026-11-07), so a fix is applied by restarting the running pod
+FAIL_GRACE_MIN=${FAIL_GRACE_MIN:-20}
 # session ids per save_candidates chunk: unchunked, 564_F_orders needs ~150 GB RAM on the
 # 1.8M valid_test sessions (it was OOM-killed on 2026-11-06); 250k keeps it near 20 GB
 CHUNK=${CHUNK:-250000}
@@ -95,7 +98,9 @@ on_exit() {
     if [ "$status" = 0 ]; then
         notify "Finished: $(cat "$LOGS/summary.txt" 2>/dev/null || echo 'no summary')"
     else
-        notify "FAILED (exit $status) in step '${STEP:-?}' after $(( (SECONDS - STEP_T0) / 60 )) min. Last lines:
+        notify "FAILED (exit $status) in step '${STEP:-?}' after $(( (SECONDS - STEP_T0) / 60 )) min.$(
+            [ "$STOP_POD" = 1 ] && [ -n "${RUNPOD_POD_ID:-}" ] && echo " The pod stops in $FAIL_GRACE_MIN min unless restarted.")
+Last lines:
 $(tail -n 5 "$LOGS/run.log" 2>/dev/null)" high
     fi
     if [ "$UPLOAD" = 1 ]; then
@@ -109,6 +114,10 @@ $(tail -n 5 "$LOGS/run.log" 2>/dev/null)" high
         fi
     fi
     if [ "$STOP_POD" = 1 ] && [ -n "${RUNPOD_POD_ID:-}" ]; then
+        if [ "$status" != 0 ] && [ "$FAIL_GRACE_MIN" -gt 0 ]; then
+            echo "waiting $FAIL_GRACE_MIN min before stopping (restart the pod to retry on its GPU)"
+            sleep $(( FAIL_GRACE_MIN * 60 ))
+        fi
         echo "stopping pod $RUNPOD_POD_ID"
         stop_pod
     fi
