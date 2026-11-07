@@ -84,7 +84,7 @@ def main() -> None:
         scores[target] = rankers.recall_at_20(oof, labels, target)
         msg = f"{target}: recall@20 {scores[target]:.5f}"
         if target == "clicks":
-            msg += f" (on the sampled rows only, as the notebook: {rankers.recall_at_20(oof.filter(pl.col("sampled")), labels, target):.5f})"
+            msg += f" (on the sampled rows only, optimistic: {rankers.recall_at_20(oof.filter(pl.col("sampled")), labels, target):.5f})"
         logger.info(f"{msg} in {time.perf_counter() - t:.0f}s")
     if len(scores) == 3:
         logger.info(f"score {sum(WEIGHTS[k] * v for k, v in scores.items()):.5f}")

@@ -20,8 +20,9 @@ Differences from the notebooks:
   shares the train bins), and predictions use the best early-stopping iteration.
 - clicks negatives are sampled per merged part (seeded), as the notebook sampled its parts
   A/B; the parts are read one at a time and the fold matrices built in batches.
-- clicks recall is reported twice: on the sampled rows (as the notebook, optimistic: each
-  session's positives compete with 40% of its negatives) and on all rows.
+- clicks recall is reported twice: on all rows, which matches the notebook's figure (full
+  valid run: 0.55845 vs 0.55835), and on the sampled rows only, which is optimistic (each
+  session's positives compete with 40% of its negatives).
 The CatBoost notebooks (CAT-200/203) are not ported: the LB inference uses XGBoost only.
 """
 

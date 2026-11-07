@@ -14,9 +14,9 @@ rows (step H of Make-172/174, formerly `train/make_parquets/Make-17x-H.ipynb`).
 
 - `rankers.py`: parameters, negative sampling, folds, training, `click_oof` and the
   recall metric. Its docstring lists the differences from the notebooks.
-- The clicks recall is printed twice. The notebook scored only the sampled rows (all
-  positives, 40% of the negatives), which flatters it: on a 20k-session sample that
-  added 0.067 recall.
+- The clicks recall is printed twice: on all rows, which reproduces the notebook's figure
+  (full valid run: 0.55845 against Chris's 0.55835), and on the sampled rows only (all
+  positives, 40% of the negatives), which flatters it (0.636 on the same run).
 
 The CatBoost notebooks (`CAT-200-orders.ipynb`, `CAT-203-carts.ipynb`) are not ported:
 Chris's LB inference uses the XGBoost models only.
