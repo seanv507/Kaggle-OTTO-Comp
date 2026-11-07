@@ -1,0 +1,424 @@
+name, memory.total [MiB], driver_version
+NVIDIA A100-SXM4-80GB, 81920 MiB, 595.91.07
+17e3fc477f8ac28c28c809fa82cf2477fd32a265
+Installed 15 packages in 85ms
+Fetching 3 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:02<00:00,  1.11it/s]
+Download complete: █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1.31GB,  701MB/s  ✓ Downloadedion complete: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1.31GB / 1.31GB,  869MB/s  
+  path: /workspace/hf
+Download complete: █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1.31GB,  701MB/s  
+Reconstruction complete: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1.31GB / 1.31GB,  869MB/s  
+warning: `VIRTUAL_ENV=/opt/.venvs/ML` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-11-06 13:50:33.772 | INFO     | __main__:main:127 - v115: engine=gpu session_chunk=4000000
+2026-11-06 13:50:33.878 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 4 chunks of 4,000,000
+2026-11-06 13:50:33.878 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/4 start 0
+/workspace/Kaggle-OTTO-Comp/.venv/lib/python3.12/site-packages/cudf_polars/streaming/utils.py:97: UserWarning: row_index is not supported for multiple partitions.
+  _fallback_inform(msg, rec.state["config_options"])
+2026-11-06 13:50:39.694 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/4 start 4,000,000
+2026-11-06 13:50:40.944 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/4 start 8,000,000
+2026-11-06 13:50:42.702 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/4 start 12,000,000
+2026-11-06 13:50:42.925 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:51:17.134 | INFO     | __main__:main:134 - v115: 57,375,735 rows -> data/covisit_matrices_valid/top_40_aids_v115.parquet in 43.4s
+2026-11-06 13:51:17.153 | INFO     | __main__:main:127 - v116: engine=gpu session_chunk=200000
+2026-11-06 13:51:17.584 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 65 chunks of 200,000
+2026-11-06 13:51:17.584 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/65 start 0
+2026-11-06 13:51:20.317 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/65 start 200,000
+2026-11-06 13:51:21.003 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/65 start 400,000
+2026-11-06 13:51:21.563 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/65 start 600,000
+2026-11-06 13:51:22.077 | INFO     | covisits:iterate_session_chunks:127 - chunk 5/65 start 800,000
+2026-11-06 13:51:22.568 | INFO     | covisits:iterate_session_chunks:127 - chunk 6/65 start 1,000,000
+2026-11-06 13:51:23.007 | INFO     | covisits:iterate_session_chunks:127 - chunk 7/65 start 1,200,000
+2026-11-06 13:51:23.489 | INFO     | covisits:iterate_session_chunks:127 - chunk 8/65 start 1,400,000
+2026-11-06 13:51:23.892 | INFO     | covisits:iterate_session_chunks:127 - chunk 9/65 start 1,600,000
+2026-11-06 13:51:24.255 | INFO     | covisits:iterate_session_chunks:127 - chunk 10/65 start 1,800,000
+2026-11-06 13:51:24.611 | INFO     | covisits:iterate_session_chunks:127 - chunk 11/65 start 2,000,000
+2026-11-06 13:51:24.964 | INFO     | covisits:iterate_session_chunks:127 - chunk 12/65 start 2,200,000
+2026-11-06 13:51:25.307 | INFO     | covisits:iterate_session_chunks:127 - chunk 13/65 start 2,400,000
+2026-11-06 13:51:25.615 | INFO     | covisits:iterate_session_chunks:127 - chunk 14/65 start 2,600,000
+2026-11-06 13:51:25.910 | INFO     | covisits:iterate_session_chunks:127 - chunk 15/65 start 2,800,000
+2026-11-06 13:51:26.189 | INFO     | covisits:iterate_session_chunks:127 - chunk 16/65 start 3,000,000
+2026-11-06 13:51:26.476 | INFO     | covisits:iterate_session_chunks:127 - chunk 17/65 start 3,200,000
+2026-11-06 13:51:26.777 | INFO     | covisits:iterate_session_chunks:127 - chunk 18/65 start 3,400,000
+2026-11-06 13:51:27.035 | INFO     | covisits:iterate_session_chunks:127 - chunk 19/65 start 3,600,000
+2026-11-06 13:51:27.304 | INFO     | covisits:iterate_session_chunks:127 - chunk 20/65 start 3,800,000
+2026-11-06 13:51:27.554 | INFO     | covisits:iterate_session_chunks:127 - chunk 21/65 start 4,000,000
+2026-11-06 13:51:27.807 | INFO     | covisits:iterate_session_chunks:127 - chunk 22/65 start 4,200,000
+2026-11-06 13:51:28.066 | INFO     | covisits:iterate_session_chunks:127 - chunk 23/65 start 4,400,000
+2026-11-06 13:51:28.297 | INFO     | covisits:iterate_session_chunks:127 - chunk 24/65 start 4,600,000
+2026-11-06 13:51:28.529 | INFO     | covisits:iterate_session_chunks:127 - chunk 25/65 start 4,800,000
+2026-11-06 13:51:28.774 | INFO     | covisits:iterate_session_chunks:127 - chunk 26/65 start 5,000,000
+2026-11-06 13:51:28.995 | INFO     | covisits:iterate_session_chunks:127 - chunk 27/65 start 5,200,000
+2026-11-06 13:51:29.263 | INFO     | covisits:iterate_session_chunks:127 - chunk 28/65 start 5,400,000
+2026-11-06 13:51:29.581 | INFO     | covisits:iterate_session_chunks:127 - chunk 29/65 start 5,600,000
+2026-11-06 13:51:29.893 | INFO     | covisits:iterate_session_chunks:127 - chunk 30/65 start 5,800,000
+2026-11-06 13:51:30.174 | INFO     | covisits:iterate_session_chunks:127 - chunk 31/65 start 6,000,000
+2026-11-06 13:51:30.422 | INFO     | covisits:iterate_session_chunks:127 - chunk 32/65 start 6,200,000
+2026-11-06 13:51:30.693 | INFO     | covisits:iterate_session_chunks:127 - chunk 33/65 start 6,400,000
+2026-11-06 13:51:30.939 | INFO     | covisits:iterate_session_chunks:127 - chunk 34/65 start 6,600,000
+2026-11-06 13:51:31.185 | INFO     | covisits:iterate_session_chunks:127 - chunk 35/65 start 6,800,000
+2026-11-06 13:51:31.415 | INFO     | covisits:iterate_session_chunks:127 - chunk 36/65 start 7,000,000
+2026-11-06 13:51:31.646 | INFO     | covisits:iterate_session_chunks:127 - chunk 37/65 start 7,200,000
+2026-11-06 13:51:31.857 | INFO     | covisits:iterate_session_chunks:127 - chunk 38/65 start 7,400,000
+2026-11-06 13:51:32.070 | INFO     | covisits:iterate_session_chunks:127 - chunk 39/65 start 7,600,000
+2026-11-06 13:51:32.278 | INFO     | covisits:iterate_session_chunks:127 - chunk 40/65 start 7,800,000
+2026-11-06 13:51:32.470 | INFO     | covisits:iterate_session_chunks:127 - chunk 41/65 start 8,000,000
+2026-11-06 13:51:32.672 | INFO     | covisits:iterate_session_chunks:127 - chunk 42/65 start 8,200,000
+2026-11-06 13:51:32.867 | INFO     | covisits:iterate_session_chunks:127 - chunk 43/65 start 8,400,000
+2026-11-06 13:51:33.044 | INFO     | covisits:iterate_session_chunks:127 - chunk 44/65 start 8,600,000
+2026-11-06 13:51:33.237 | INFO     | covisits:iterate_session_chunks:127 - chunk 45/65 start 8,800,000
+2026-11-06 13:51:33.405 | INFO     | covisits:iterate_session_chunks:127 - chunk 46/65 start 9,000,000
+2026-11-06 13:51:33.579 | INFO     | covisits:iterate_session_chunks:127 - chunk 47/65 start 9,200,000
+2026-11-06 13:51:33.750 | INFO     | covisits:iterate_session_chunks:127 - chunk 48/65 start 9,400,000
+2026-11-06 13:51:33.932 | INFO     | covisits:iterate_session_chunks:127 - chunk 49/65 start 9,600,000
+2026-11-06 13:51:34.091 | INFO     | covisits:iterate_session_chunks:127 - chunk 50/65 start 9,800,000
+2026-11-06 13:51:34.248 | INFO     | covisits:iterate_session_chunks:127 - chunk 51/65 start 10,000,000
+2026-11-06 13:51:34.396 | INFO     | covisits:iterate_session_chunks:127 - chunk 52/65 start 10,200,000
+2026-11-06 13:51:34.538 | INFO     | covisits:iterate_session_chunks:127 - chunk 53/65 start 10,400,000
+2026-11-06 13:51:34.693 | INFO     | covisits:iterate_session_chunks:127 - chunk 54/65 start 10,600,000
+2026-11-06 13:51:34.842 | INFO     | covisits:iterate_session_chunks:127 - chunk 55/65 start 10,800,000
+2026-11-06 13:51:34.981 | INFO     | covisits:iterate_session_chunks:127 - chunk 56/65 start 11,000,000
+2026-11-06 13:51:35.097 | INFO     | covisits:iterate_session_chunks:127 - chunk 57/65 start 11,200,000
+2026-11-06 13:51:35.201 | INFO     | covisits:iterate_session_chunks:127 - chunk 58/65 start 11,400,000
+2026-11-06 13:51:35.299 | INFO     | covisits:iterate_session_chunks:127 - chunk 59/65 start 11,600,000
+2026-11-06 13:51:35.396 | INFO     | covisits:iterate_session_chunks:127 - chunk 60/65 start 11,800,000
+2026-11-06 13:51:35.492 | INFO     | covisits:iterate_session_chunks:127 - chunk 61/65 start 12,000,000
+2026-11-06 13:51:35.613 | INFO     | covisits:iterate_session_chunks:127 - chunk 62/65 start 12,200,000
+2026-11-06 13:51:35.709 | INFO     | covisits:iterate_session_chunks:127 - chunk 63/65 start 12,400,000
+2026-11-06 13:51:35.802 | INFO     | covisits:iterate_session_chunks:127 - chunk 64/65 start 12,600,000
+2026-11-06 13:51:35.893 | INFO     | covisits:iterate_session_chunks:127 - chunk 65/65 start 12,800,000
+2026-11-06 13:51:35.962 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:52:28.577 | INFO     | __main__:main:134 - v116: 62,885,858 rows -> data/covisit_matrices_valid/top_40_aids_v116.parquet in 71.4s
+2026-11-06 13:52:28.600 | INFO     | __main__:main:127 - v155: engine=gpu session_chunk=None
+2026-11-06 13:52:31.320 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:52:31.498 | INFO     | __main__:main:134 - v155: 3,439,354 rows -> data/covisit_matrices_valid/top_40_aids_v155_d0.parquet in 2.9s
+2026-11-06 13:52:31.499 | INFO     | __main__:main:127 - v157: engine=gpu session_chunk=None
+2026-11-06 13:52:32.116 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:52:34.417 | INFO     | __main__:main:134 - v157: 27,171,962 rows -> data/covisit_matrices_valid/top_80_aids_v157_d0.parquet in 2.9s
+2026-11-06 13:52:34.419 | INFO     | __main__:main:127 - v165: engine=gpu-inmem session_chunk=None
+2026-11-06 13:52:34.896 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:52:34.945 | INFO     | __main__:main:134 - v165: 1,077,168 rows -> data/covisit_matrices_valid/top_40_aids_v165.parquet in 0.5s
+2026-11-06 13:52:34.945 | INFO     | __main__:main:127 - v166: engine=gpu-inmem session_chunk=None
+2026-11-06 13:52:38.475 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:52:57.427 | INFO     | __main__:main:134 - v166: 53,382,106 rows -> data/covisit_matrices_valid/top_40_aids_v166.parquet in 22.5s
+2026-11-06 13:52:57.440 | INFO     | __main__:main:127 - v167: engine=gpu session_chunk=None
+2026-11-06 13:53:00.387 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:53:08.091 | INFO     | __main__:main:134 - v167: 37,127,731 rows -> data/covisit_matrices_valid/top_40_aids_v167.parquet in 10.7s
+2026-11-06 13:53:08.096 | INFO     | __main__:main:127 - v168: engine=gpu session_chunk=None
+2026-11-06 13:53:10.776 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:53:22.426 | INFO     | __main__:main:134 - v168: 45,675,453 rows -> data/covisit_matrices_valid/top_40_aids_v168.parquet in 14.3s
+2026-11-06 13:53:22.437 | INFO     | __main__:main:127 - v217: engine=gpu session_chunk=250000
+2026-11-06 13:53:22.642 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 52 chunks of 250,000
+2026-11-06 13:53:22.643 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/52 start 0
+2026-11-06 13:53:29.753 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/52 start 250,000
+2026-11-06 13:53:29.963 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/52 start 500,000
+2026-11-06 13:53:30.150 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/52 start 750,000
+2026-11-06 13:53:30.329 | INFO     | covisits:iterate_session_chunks:127 - chunk 5/52 start 1,000,000
+2026-11-06 13:53:30.498 | INFO     | covisits:iterate_session_chunks:127 - chunk 6/52 start 1,250,000
+2026-11-06 13:53:30.657 | INFO     | covisits:iterate_session_chunks:127 - chunk 7/52 start 1,500,000
+2026-11-06 13:53:30.803 | INFO     | covisits:iterate_session_chunks:127 - chunk 8/52 start 1,750,000
+2026-11-06 13:53:30.939 | INFO     | covisits:iterate_session_chunks:127 - chunk 9/52 start 2,000,000
+2026-11-06 13:53:31.074 | INFO     | covisits:iterate_session_chunks:127 - chunk 10/52 start 2,250,000
+2026-11-06 13:53:31.199 | INFO     | covisits:iterate_session_chunks:127 - chunk 11/52 start 2,500,000
+2026-11-06 13:53:31.321 | INFO     | covisits:iterate_session_chunks:127 - chunk 12/52 start 2,750,000
+2026-11-06 13:53:31.437 | INFO     | covisits:iterate_session_chunks:127 - chunk 13/52 start 3,000,000
+2026-11-06 13:53:31.551 | INFO     | covisits:iterate_session_chunks:127 - chunk 14/52 start 3,250,000
+2026-11-06 13:53:31.665 | INFO     | covisits:iterate_session_chunks:127 - chunk 15/52 start 3,500,000
+2026-11-06 13:53:31.776 | INFO     | covisits:iterate_session_chunks:127 - chunk 16/52 start 3,750,000
+2026-11-06 13:53:31.885 | INFO     | covisits:iterate_session_chunks:127 - chunk 17/52 start 4,000,000
+2026-11-06 13:53:31.992 | INFO     | covisits:iterate_session_chunks:127 - chunk 18/52 start 4,250,000
+2026-11-06 13:53:32.101 | INFO     | covisits:iterate_session_chunks:127 - chunk 19/52 start 4,500,000
+2026-11-06 13:53:32.203 | INFO     | covisits:iterate_session_chunks:127 - chunk 20/52 start 4,750,000
+2026-11-06 13:53:32.308 | INFO     | covisits:iterate_session_chunks:127 - chunk 21/52 start 5,000,000
+2026-11-06 13:53:32.407 | INFO     | covisits:iterate_session_chunks:127 - chunk 22/52 start 5,250,000
+2026-11-06 13:53:32.506 | INFO     | covisits:iterate_session_chunks:127 - chunk 23/52 start 5,500,000
+2026-11-06 13:53:32.602 | INFO     | covisits:iterate_session_chunks:127 - chunk 24/52 start 5,750,000
+2026-11-06 13:53:32.696 | INFO     | covisits:iterate_session_chunks:127 - chunk 25/52 start 6,000,000
+2026-11-06 13:53:32.787 | INFO     | covisits:iterate_session_chunks:127 - chunk 26/52 start 6,250,000
+2026-11-06 13:53:32.878 | INFO     | covisits:iterate_session_chunks:127 - chunk 27/52 start 6,500,000
+2026-11-06 13:53:32.969 | INFO     | covisits:iterate_session_chunks:127 - chunk 28/52 start 6,750,000
+2026-11-06 13:53:33.058 | INFO     | covisits:iterate_session_chunks:127 - chunk 29/52 start 7,000,000
+2026-11-06 13:53:33.144 | INFO     | covisits:iterate_session_chunks:127 - chunk 30/52 start 7,250,000
+2026-11-06 13:53:33.231 | INFO     | covisits:iterate_session_chunks:127 - chunk 31/52 start 7,500,000
+2026-11-06 13:53:33.315 | INFO     | covisits:iterate_session_chunks:127 - chunk 32/52 start 7,750,000
+2026-11-06 13:53:33.397 | INFO     | covisits:iterate_session_chunks:127 - chunk 33/52 start 8,000,000
+2026-11-06 13:53:33.481 | INFO     | covisits:iterate_session_chunks:127 - chunk 34/52 start 8,250,000
+2026-11-06 13:53:33.567 | INFO     | covisits:iterate_session_chunks:127 - chunk 35/52 start 8,500,000
+2026-11-06 13:53:33.648 | INFO     | covisits:iterate_session_chunks:127 - chunk 36/52 start 8,750,000
+2026-11-06 13:53:33.728 | INFO     | covisits:iterate_session_chunks:127 - chunk 37/52 start 9,000,000
+2026-11-06 13:53:33.809 | INFO     | covisits:iterate_session_chunks:127 - chunk 38/52 start 9,250,000
+2026-11-06 13:53:33.889 | INFO     | covisits:iterate_session_chunks:127 - chunk 39/52 start 9,500,000
+2026-11-06 13:53:33.969 | INFO     | covisits:iterate_session_chunks:127 - chunk 40/52 start 9,750,000
+2026-11-06 13:53:34.048 | INFO     | covisits:iterate_session_chunks:127 - chunk 41/52 start 10,000,000
+2026-11-06 13:53:34.125 | INFO     | covisits:iterate_session_chunks:127 - chunk 42/52 start 10,250,000
+2026-11-06 13:53:34.202 | INFO     | covisits:iterate_session_chunks:127 - chunk 43/52 start 10,500,000
+2026-11-06 13:53:34.280 | INFO     | covisits:iterate_session_chunks:127 - chunk 44/52 start 10,750,000
+2026-11-06 13:53:34.356 | INFO     | covisits:iterate_session_chunks:127 - chunk 45/52 start 11,000,000
+2026-11-06 13:53:34.426 | INFO     | covisits:iterate_session_chunks:127 - chunk 46/52 start 11,250,000
+2026-11-06 13:53:34.493 | INFO     | covisits:iterate_session_chunks:127 - chunk 47/52 start 11,500,000
+2026-11-06 13:53:34.559 | INFO     | covisits:iterate_session_chunks:127 - chunk 48/52 start 11,750,000
+2026-11-06 13:53:34.625 | INFO     | covisits:iterate_session_chunks:127 - chunk 49/52 start 12,000,000
+2026-11-06 13:53:34.694 | INFO     | covisits:iterate_session_chunks:127 - chunk 50/52 start 12,250,000
+2026-11-06 13:53:34.764 | INFO     | covisits:iterate_session_chunks:127 - chunk 51/52 start 12,500,000
+2026-11-06 13:53:34.832 | INFO     | covisits:iterate_session_chunks:127 - chunk 52/52 start 12,750,000
+2026-11-06 13:53:34.894 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:53:39.699 | INFO     | __main__:main:134 - v217: 36,838,855 rows -> data/covisit_matrices_valid/top_40_aids_v217.parquet in 17.3s
+2026-11-06 13:53:39.703 | INFO     | __main__:main:127 - v220: engine=gpu session_chunk=250000
+2026-11-06 13:53:39.812 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 52 chunks of 250,000
+2026-11-06 13:53:39.813 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/52 start 0
+2026-11-06 13:53:40.172 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/52 start 250,000
+2026-11-06 13:53:40.457 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/52 start 500,000
+2026-11-06 13:53:40.717 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/52 start 750,000
+2026-11-06 13:53:40.921 | INFO     | covisits:iterate_session_chunks:127 - chunk 5/52 start 1,000,000
+2026-11-06 13:53:41.113 | INFO     | covisits:iterate_session_chunks:127 - chunk 6/52 start 1,250,000
+2026-11-06 13:53:41.300 | INFO     | covisits:iterate_session_chunks:127 - chunk 7/52 start 1,500,000
+2026-11-06 13:53:41.467 | INFO     | covisits:iterate_session_chunks:127 - chunk 8/52 start 1,750,000
+2026-11-06 13:53:41.626 | INFO     | covisits:iterate_session_chunks:127 - chunk 9/52 start 2,000,000
+2026-11-06 13:53:41.782 | INFO     | covisits:iterate_session_chunks:127 - chunk 10/52 start 2,250,000
+2026-11-06 13:53:41.926 | INFO     | covisits:iterate_session_chunks:127 - chunk 11/52 start 2,500,000
+2026-11-06 13:53:42.067 | INFO     | covisits:iterate_session_chunks:127 - chunk 12/52 start 2,750,000
+2026-11-06 13:53:42.202 | INFO     | covisits:iterate_session_chunks:127 - chunk 13/52 start 3,000,000
+2026-11-06 13:53:42.338 | INFO     | covisits:iterate_session_chunks:127 - chunk 14/52 start 3,250,000
+2026-11-06 13:53:42.464 | INFO     | covisits:iterate_session_chunks:127 - chunk 15/52 start 3,500,000
+2026-11-06 13:53:42.592 | INFO     | covisits:iterate_session_chunks:127 - chunk 16/52 start 3,750,000
+2026-11-06 13:53:42.717 | INFO     | covisits:iterate_session_chunks:127 - chunk 17/52 start 4,000,000
+2026-11-06 13:53:42.840 | INFO     | covisits:iterate_session_chunks:127 - chunk 18/52 start 4,250,000
+2026-11-06 13:53:42.961 | INFO     | covisits:iterate_session_chunks:127 - chunk 19/52 start 4,500,000
+2026-11-06 13:53:43.079 | INFO     | covisits:iterate_session_chunks:127 - chunk 20/52 start 4,750,000
+2026-11-06 13:53:43.199 | INFO     | covisits:iterate_session_chunks:127 - chunk 21/52 start 5,000,000
+2026-11-06 13:53:43.310 | INFO     | covisits:iterate_session_chunks:127 - chunk 22/52 start 5,250,000
+2026-11-06 13:53:43.422 | INFO     | covisits:iterate_session_chunks:127 - chunk 23/52 start 5,500,000
+2026-11-06 13:53:43.530 | INFO     | covisits:iterate_session_chunks:127 - chunk 24/52 start 5,750,000
+2026-11-06 13:53:43.636 | INFO     | covisits:iterate_session_chunks:127 - chunk 25/52 start 6,000,000
+2026-11-06 13:53:43.738 | INFO     | covisits:iterate_session_chunks:127 - chunk 26/52 start 6,250,000
+2026-11-06 13:53:43.839 | INFO     | covisits:iterate_session_chunks:127 - chunk 27/52 start 6,500,000
+2026-11-06 13:53:43.936 | INFO     | covisits:iterate_session_chunks:127 - chunk 28/52 start 6,750,000
+2026-11-06 13:53:44.034 | INFO     | covisits:iterate_session_chunks:127 - chunk 29/52 start 7,000,000
+2026-11-06 13:53:44.129 | INFO     | covisits:iterate_session_chunks:127 - chunk 30/52 start 7,250,000
+2026-11-06 13:53:44.220 | INFO     | covisits:iterate_session_chunks:127 - chunk 31/52 start 7,500,000
+2026-11-06 13:53:44.315 | INFO     | covisits:iterate_session_chunks:127 - chunk 32/52 start 7,750,000
+2026-11-06 13:53:44.404 | INFO     | covisits:iterate_session_chunks:127 - chunk 33/52 start 8,000,000
+2026-11-06 13:53:44.495 | INFO     | covisits:iterate_session_chunks:127 - chunk 34/52 start 8,250,000
+2026-11-06 13:53:44.586 | INFO     | covisits:iterate_session_chunks:127 - chunk 35/52 start 8,500,000
+2026-11-06 13:53:44.674 | INFO     | covisits:iterate_session_chunks:127 - chunk 36/52 start 8,750,000
+2026-11-06 13:53:44.762 | INFO     | covisits:iterate_session_chunks:127 - chunk 37/52 start 9,000,000
+2026-11-06 13:53:44.849 | INFO     | covisits:iterate_session_chunks:127 - chunk 38/52 start 9,250,000
+2026-11-06 13:53:44.937 | INFO     | covisits:iterate_session_chunks:127 - chunk 39/52 start 9,500,000
+2026-11-06 13:53:45.023 | INFO     | covisits:iterate_session_chunks:127 - chunk 40/52 start 9,750,000
+2026-11-06 13:53:45.108 | INFO     | covisits:iterate_session_chunks:127 - chunk 41/52 start 10,000,000
+2026-11-06 13:53:45.191 | INFO     | covisits:iterate_session_chunks:127 - chunk 42/52 start 10,250,000
+2026-11-06 13:53:45.276 | INFO     | covisits:iterate_session_chunks:127 - chunk 43/52 start 10,500,000
+2026-11-06 13:53:45.359 | INFO     | covisits:iterate_session_chunks:127 - chunk 44/52 start 10,750,000
+2026-11-06 13:53:45.439 | INFO     | covisits:iterate_session_chunks:127 - chunk 45/52 start 11,000,000
+2026-11-06 13:53:45.515 | INFO     | covisits:iterate_session_chunks:127 - chunk 46/52 start 11,250,000
+2026-11-06 13:53:45.585 | INFO     | covisits:iterate_session_chunks:127 - chunk 47/52 start 11,500,000
+2026-11-06 13:53:45.655 | INFO     | covisits:iterate_session_chunks:127 - chunk 48/52 start 11,750,000
+2026-11-06 13:53:45.722 | INFO     | covisits:iterate_session_chunks:127 - chunk 49/52 start 12,000,000
+2026-11-06 13:53:45.794 | INFO     | covisits:iterate_session_chunks:127 - chunk 50/52 start 12,250,000
+2026-11-06 13:53:45.862 | INFO     | covisits:iterate_session_chunks:127 - chunk 51/52 start 12,500,000
+2026-11-06 13:53:45.931 | INFO     | covisits:iterate_session_chunks:127 - chunk 52/52 start 12,750,000
+2026-11-06 13:53:45.993 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:53:55.471 | INFO     | __main__:main:134 - v220: 70,036,957 rows -> data/covisit_matrices_valid/top_40_aids_v220.parquet in 15.8s
+2026-11-06 13:53:55.477 | INFO     | __main__:main:127 - v226: engine=gpu session_chunk=None
+2026-11-06 13:53:56.093 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:53:56.594 | INFO     | __main__:main:134 - v226: 11,763,708 rows -> data/covisit_matrices_valid/top_40_aids_v226.parquet in 1.1s
+2026-11-06 13:53:56.595 | INFO     | __main__:main:127 - v232: engine=gpu session_chunk=250000
+2026-11-06 13:53:56.718 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 52 chunks of 250,000
+2026-11-06 13:53:56.719 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/52 start 0
+2026-11-06 13:54:06.445 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/52 start 250,000
+2026-11-06 13:54:06.824 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/52 start 500,000
+2026-11-06 13:54:07.157 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/52 start 750,000
+2026-11-06 13:54:07.475 | INFO     | covisits:iterate_session_chunks:127 - chunk 5/52 start 1,000,000
+2026-11-06 13:54:07.772 | INFO     | covisits:iterate_session_chunks:127 - chunk 6/52 start 1,250,000
+2026-11-06 13:54:08.064 | INFO     | covisits:iterate_session_chunks:127 - chunk 7/52 start 1,500,000
+2026-11-06 13:54:08.331 | INFO     | covisits:iterate_session_chunks:127 - chunk 8/52 start 1,750,000
+2026-11-06 13:54:08.583 | INFO     | covisits:iterate_session_chunks:127 - chunk 9/52 start 2,000,000
+2026-11-06 13:54:08.837 | INFO     | covisits:iterate_session_chunks:127 - chunk 10/52 start 2,250,000
+2026-11-06 13:54:09.069 | INFO     | covisits:iterate_session_chunks:127 - chunk 11/52 start 2,500,000
+2026-11-06 13:54:09.295 | INFO     | covisits:iterate_session_chunks:127 - chunk 12/52 start 2,750,000
+2026-11-06 13:54:09.503 | INFO     | covisits:iterate_session_chunks:127 - chunk 13/52 start 3,000,000
+2026-11-06 13:54:09.721 | INFO     | covisits:iterate_session_chunks:127 - chunk 14/52 start 3,250,000
+2026-11-06 13:54:09.916 | INFO     | covisits:iterate_session_chunks:127 - chunk 15/52 start 3,500,000
+2026-11-06 13:54:10.113 | INFO     | covisits:iterate_session_chunks:127 - chunk 16/52 start 3,750,000
+2026-11-06 13:54:10.318 | INFO     | covisits:iterate_session_chunks:127 - chunk 17/52 start 4,000,000
+2026-11-06 13:54:10.513 | INFO     | covisits:iterate_session_chunks:127 - chunk 18/52 start 4,250,000
+2026-11-06 13:54:10.709 | INFO     | covisits:iterate_session_chunks:127 - chunk 19/52 start 4,500,000
+2026-11-06 13:54:10.894 | INFO     | covisits:iterate_session_chunks:127 - chunk 20/52 start 4,750,000
+2026-11-06 13:54:11.113 | INFO     | covisits:iterate_session_chunks:127 - chunk 21/52 start 5,000,000
+2026-11-06 13:54:11.291 | INFO     | covisits:iterate_session_chunks:127 - chunk 22/52 start 5,250,000
+2026-11-06 13:54:11.470 | INFO     | covisits:iterate_session_chunks:127 - chunk 23/52 start 5,500,000
+2026-11-06 13:54:11.641 | INFO     | covisits:iterate_session_chunks:127 - chunk 24/52 start 5,750,000
+2026-11-06 13:54:11.808 | INFO     | covisits:iterate_session_chunks:127 - chunk 25/52 start 6,000,000
+2026-11-06 13:54:11.963 | INFO     | covisits:iterate_session_chunks:127 - chunk 26/52 start 6,250,000
+2026-11-06 13:54:12.121 | INFO     | covisits:iterate_session_chunks:127 - chunk 27/52 start 6,500,000
+2026-11-06 13:54:12.273 | INFO     | covisits:iterate_session_chunks:127 - chunk 28/52 start 6,750,000
+2026-11-06 13:54:12.418 | INFO     | covisits:iterate_session_chunks:127 - chunk 29/52 start 7,000,000
+2026-11-06 13:54:12.562 | INFO     | covisits:iterate_session_chunks:127 - chunk 30/52 start 7,250,000
+2026-11-06 13:54:12.697 | INFO     | covisits:iterate_session_chunks:127 - chunk 31/52 start 7,500,000
+2026-11-06 13:54:12.837 | INFO     | covisits:iterate_session_chunks:127 - chunk 32/52 start 7,750,000
+2026-11-06 13:54:12.971 | INFO     | covisits:iterate_session_chunks:127 - chunk 33/52 start 8,000,000
+2026-11-06 13:54:13.105 | INFO     | covisits:iterate_session_chunks:127 - chunk 34/52 start 8,250,000
+2026-11-06 13:54:13.234 | INFO     | covisits:iterate_session_chunks:127 - chunk 35/52 start 8,500,000
+2026-11-06 13:54:13.363 | INFO     | covisits:iterate_session_chunks:127 - chunk 36/52 start 8,750,000
+2026-11-06 13:54:13.492 | INFO     | covisits:iterate_session_chunks:127 - chunk 37/52 start 9,000,000
+2026-11-06 13:54:13.624 | INFO     | covisits:iterate_session_chunks:127 - chunk 38/52 start 9,250,000
+2026-11-06 13:54:13.755 | INFO     | covisits:iterate_session_chunks:127 - chunk 39/52 start 9,500,000
+2026-11-06 13:54:13.883 | INFO     | covisits:iterate_session_chunks:127 - chunk 40/52 start 9,750,000
+2026-11-06 13:54:14.009 | INFO     | covisits:iterate_session_chunks:127 - chunk 41/52 start 10,000,000
+2026-11-06 13:54:14.132 | INFO     | covisits:iterate_session_chunks:127 - chunk 42/52 start 10,250,000
+2026-11-06 13:54:14.256 | INFO     | covisits:iterate_session_chunks:127 - chunk 43/52 start 10,500,000
+2026-11-06 13:54:14.380 | INFO     | covisits:iterate_session_chunks:127 - chunk 44/52 start 10,750,000
+2026-11-06 13:54:14.504 | INFO     | covisits:iterate_session_chunks:127 - chunk 45/52 start 11,000,000
+2026-11-06 13:54:14.614 | INFO     | covisits:iterate_session_chunks:127 - chunk 46/52 start 11,250,000
+2026-11-06 13:54:14.709 | INFO     | covisits:iterate_session_chunks:127 - chunk 47/52 start 11,500,000
+2026-11-06 13:54:14.799 | INFO     | covisits:iterate_session_chunks:127 - chunk 48/52 start 11,750,000
+2026-11-06 13:54:14.889 | INFO     | covisits:iterate_session_chunks:127 - chunk 49/52 start 12,000,000
+2026-11-06 13:54:14.983 | INFO     | covisits:iterate_session_chunks:127 - chunk 50/52 start 12,250,000
+2026-11-06 13:54:15.074 | INFO     | covisits:iterate_session_chunks:127 - chunk 51/52 start 12,500,000
+2026-11-06 13:54:15.165 | INFO     | covisits:iterate_session_chunks:127 - chunk 52/52 start 12,750,000
+2026-11-06 13:54:15.249 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:54:29.872 | INFO     | __main__:main:134 - v232: 82,651,188 rows -> data/covisit_matrices_valid/top_40_aids_v232.parquet in 33.3s
+2026-11-06 13:54:29.881 | INFO     | __main__:main:127 - v235: engine=gpu session_chunk=250000
+2026-11-06 13:54:30.050 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 52 chunks of 250,000
+2026-11-06 13:54:30.050 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/52 start 0
+2026-11-06 13:54:31.464 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/52 start 250,000
+2026-11-06 13:54:31.971 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/52 start 500,000
+2026-11-06 13:54:32.427 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/52 start 750,000
+2026-11-06 13:54:32.860 | INFO     | covisits:iterate_session_chunks:127 - chunk 5/52 start 1,000,000
+2026-11-06 13:54:33.266 | INFO     | covisits:iterate_session_chunks:127 - chunk 6/52 start 1,250,000
+2026-11-06 13:54:33.664 | INFO     | covisits:iterate_session_chunks:127 - chunk 7/52 start 1,500,000
+2026-11-06 13:54:34.009 | INFO     | covisits:iterate_session_chunks:127 - chunk 8/52 start 1,750,000
+2026-11-06 13:54:34.342 | INFO     | covisits:iterate_session_chunks:127 - chunk 9/52 start 2,000,000
+2026-11-06 13:54:34.673 | INFO     | covisits:iterate_session_chunks:127 - chunk 10/52 start 2,250,000
+2026-11-06 13:54:34.975 | INFO     | covisits:iterate_session_chunks:127 - chunk 11/52 start 2,500,000
+2026-11-06 13:54:35.263 | INFO     | covisits:iterate_session_chunks:127 - chunk 12/52 start 2,750,000
+2026-11-06 13:54:35.525 | INFO     | covisits:iterate_session_chunks:127 - chunk 13/52 start 3,000,000
+2026-11-06 13:54:35.793 | INFO     | covisits:iterate_session_chunks:127 - chunk 14/52 start 3,250,000
+2026-11-06 13:54:36.042 | INFO     | covisits:iterate_session_chunks:127 - chunk 15/52 start 3,500,000
+2026-11-06 13:54:36.287 | INFO     | covisits:iterate_session_chunks:127 - chunk 16/52 start 3,750,000
+2026-11-06 13:54:36.528 | INFO     | covisits:iterate_session_chunks:127 - chunk 17/52 start 4,000,000
+2026-11-06 13:54:36.762 | INFO     | covisits:iterate_session_chunks:127 - chunk 18/52 start 4,250,000
+2026-11-06 13:54:36.997 | INFO     | covisits:iterate_session_chunks:127 - chunk 19/52 start 4,500,000
+2026-11-06 13:54:37.219 | INFO     | covisits:iterate_session_chunks:127 - chunk 20/52 start 4,750,000
+2026-11-06 13:54:37.450 | INFO     | covisits:iterate_session_chunks:127 - chunk 21/52 start 5,000,000
+2026-11-06 13:54:37.663 | INFO     | covisits:iterate_session_chunks:127 - chunk 22/52 start 5,250,000
+2026-11-06 13:54:37.877 | INFO     | covisits:iterate_session_chunks:127 - chunk 23/52 start 5,500,000
+2026-11-06 13:54:38.078 | INFO     | covisits:iterate_session_chunks:127 - chunk 24/52 start 5,750,000
+2026-11-06 13:54:38.300 | INFO     | covisits:iterate_session_chunks:127 - chunk 25/52 start 6,000,000
+2026-11-06 13:54:38.482 | INFO     | covisits:iterate_session_chunks:127 - chunk 26/52 start 6,250,000
+2026-11-06 13:54:38.666 | INFO     | covisits:iterate_session_chunks:127 - chunk 27/52 start 6,500,000
+2026-11-06 13:54:38.845 | INFO     | covisits:iterate_session_chunks:127 - chunk 28/52 start 6,750,000
+2026-11-06 13:54:39.019 | INFO     | covisits:iterate_session_chunks:127 - chunk 29/52 start 7,000,000
+2026-11-06 13:54:39.187 | INFO     | covisits:iterate_session_chunks:127 - chunk 30/52 start 7,250,000
+2026-11-06 13:54:39.345 | INFO     | covisits:iterate_session_chunks:127 - chunk 31/52 start 7,500,000
+2026-11-06 13:54:39.506 | INFO     | covisits:iterate_session_chunks:127 - chunk 32/52 start 7,750,000
+2026-11-06 13:54:39.658 | INFO     | covisits:iterate_session_chunks:127 - chunk 33/52 start 8,000,000
+2026-11-06 13:54:39.813 | INFO     | covisits:iterate_session_chunks:127 - chunk 34/52 start 8,250,000
+2026-11-06 13:54:39.961 | INFO     | covisits:iterate_session_chunks:127 - chunk 35/52 start 8,500,000
+2026-11-06 13:54:40.109 | INFO     | covisits:iterate_session_chunks:127 - chunk 36/52 start 8,750,000
+2026-11-06 13:54:40.250 | INFO     | covisits:iterate_session_chunks:127 - chunk 37/52 start 9,000,000
+2026-11-06 13:54:40.393 | INFO     | covisits:iterate_session_chunks:127 - chunk 38/52 start 9,250,000
+2026-11-06 13:54:40.537 | INFO     | covisits:iterate_session_chunks:127 - chunk 39/52 start 9,500,000
+2026-11-06 13:54:40.681 | INFO     | covisits:iterate_session_chunks:127 - chunk 40/52 start 9,750,000
+2026-11-06 13:54:40.817 | INFO     | covisits:iterate_session_chunks:127 - chunk 41/52 start 10,000,000
+2026-11-06 13:54:40.946 | INFO     | covisits:iterate_session_chunks:127 - chunk 42/52 start 10,250,000
+2026-11-06 13:54:41.073 | INFO     | covisits:iterate_session_chunks:127 - chunk 43/52 start 10,500,000
+2026-11-06 13:54:41.197 | INFO     | covisits:iterate_session_chunks:127 - chunk 44/52 start 10,750,000
+2026-11-06 13:54:41.321 | INFO     | covisits:iterate_session_chunks:127 - chunk 45/52 start 11,000,000
+2026-11-06 13:54:41.428 | INFO     | covisits:iterate_session_chunks:127 - chunk 46/52 start 11,250,000
+2026-11-06 13:54:41.521 | INFO     | covisits:iterate_session_chunks:127 - chunk 47/52 start 11,500,000
+2026-11-06 13:54:41.611 | INFO     | covisits:iterate_session_chunks:127 - chunk 48/52 start 11,750,000
+2026-11-06 13:54:41.702 | INFO     | covisits:iterate_session_chunks:127 - chunk 49/52 start 12,000,000
+2026-11-06 13:54:41.789 | INFO     | covisits:iterate_session_chunks:127 - chunk 50/52 start 12,250,000
+2026-11-06 13:54:41.881 | INFO     | covisits:iterate_session_chunks:127 - chunk 51/52 start 12,500,000
+2026-11-06 13:54:41.969 | INFO     | covisits:iterate_session_chunks:127 - chunk 52/52 start 12,750,000
+2026-11-06 13:54:42.042 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:55:06.780 | INFO     | __main__:main:134 - v235: 104,295,289 rows -> data/covisit_matrices_valid/top_40_aids_v235.parquet in 36.9s
+2026-11-06 13:55:06.793 | INFO     | __main__:main:127 - v239: engine=gpu session_chunk=2000000
+2026-11-06 13:55:07.022 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 7 chunks of 2,000,000
+2026-11-06 13:55:07.022 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/7 start 0
+2026-11-06 13:55:08.435 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/7 start 2,000,000
+2026-11-06 13:55:08.814 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/7 start 4,000,000
+2026-11-06 13:55:09.130 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/7 start 6,000,000
+2026-11-06 13:55:09.377 | INFO     | covisits:iterate_session_chunks:127 - chunk 5/7 start 8,000,000
+2026-11-06 13:55:09.596 | INFO     | covisits:iterate_session_chunks:127 - chunk 6/7 start 10,000,000
+2026-11-06 13:55:09.761 | INFO     | covisits:iterate_session_chunks:127 - chunk 7/7 start 12,000,000
+2026-11-06 13:55:09.852 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:55:15.376 | INFO     | __main__:main:134 - v239: 18,694,947 rows -> data/covisit_matrices_valid/top_40_aids_v239.parquet in 8.6s
+2026-11-06 13:55:15.378 | INFO     | __main__:main:127 - v700: engine=gpu session_chunk=None
+2026-11-06 13:55:15.798 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:55:15.855 | INFO     | __main__:main:134 - v700: 1,258,599 rows -> data/covisit_matrices_valid/top_40_aids_v700.parquet in 0.5s
+2026-11-06 13:55:15.856 | INFO     | __main__:main:127 - v701: engine=gpu session_chunk=None
+2026-11-06 13:55:16.366 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:55:16.764 | INFO     | __main__:main:134 - v701: 6,243,850 rows -> data/covisit_matrices_valid/top_40_aids_v701.parquet in 0.9s
+2026-11-06 13:55:16.765 | INFO     | __main__:main:127 - v93: engine=gpu session_chunk=2000000
+2026-11-06 13:55:16.867 | INFO     | covisits:iterate_session_chunks:125 - sessions 0..12,899,778 in 7 chunks of 2,000,000
+2026-11-06 13:55:16.867 | INFO     | covisits:iterate_session_chunks:127 - chunk 1/7 start 0
+2026-11-06 13:55:18.237 | INFO     | covisits:iterate_session_chunks:127 - chunk 2/7 start 2,000,000
+2026-11-06 13:55:19.222 | INFO     | covisits:iterate_session_chunks:127 - chunk 3/7 start 4,000,000
+2026-11-06 13:55:20.120 | INFO     | covisits:iterate_session_chunks:127 - chunk 4/7 start 6,000,000
+2026-11-06 13:55:20.871 | INFO     | covisits:iterate_session_chunks:127 - chunk 5/7 start 8,000,000
+2026-11-06 13:55:21.551 | INFO     | covisits:iterate_session_chunks:127 - chunk 6/7 start 10,000,000
+2026-11-06 13:55:22.061 | INFO     | covisits:iterate_session_chunks:127 - chunk 7/7 start 12,000,000
+2026-11-06 13:55:22.267 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:55:41.485 | INFO     | __main__:main:134 - v93: 95,124,830 rows -> data/covisit_matrices_valid/top_80_aids_v93.parquet in 24.7s
+2026-11-06 13:55:41.495 | INFO     | __main__:main:127 - v90: engine=gpu session_chunk=None
+2026-11-06 13:55:43.048 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:55:46.521 | INFO     | __main__:main:134 - v90: 24,179,021 rows -> data/covisit_matrices_valid/top_40_buy2buy_v90.parquet in 5.0s
+2026-11-06 13:55:46.524 | INFO     | __main__:main:127 - v95: engine=gpu session_chunk=None
+2026-11-06 13:55:59.489 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:56:27.122 | INFO     | __main__:main:134 - v95: 65,002,114 rows -> data/covisit_matrices_valid/top_40_orders_carts_v95.parquet in 40.6s
+2026-11-06 13:56:27.136 | INFO     | __main__:main:127 - v99: engine=gpu session_chunk=None
+2026-11-06 13:56:28.967 | INFO     | covisits:build_covisits:180 - aggregating chunks
+2026-11-06 13:56:31.001 | INFO     | __main__:main:134 - v99: 18,734,371 rows -> data/covisit_matrices_valid/top_40_buy2buy_v99.parquet in 3.9s
+2026-11-06 13:56:31.003 | INFO     | __main__:main:136 - done in 357.2s
+warning: `VIRTUAL_ENV=/opt/.venvs/ML` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-11-06 13:56:33.741 | INFO     | __main__:for_run:90 - loaded top_40_orders_carts_v95.parquet (rank < 10): 17,870,340 rows in 0.7s
+2026-11-06 14:05:28.974 | INFO     | __main__:main:175 - 564_1: 90,062,550 rows in 535.9s
+2026-11-06 14:05:40.217 | INFO     | __main__:main:179 - 564_1: recall carts 0.43174, orders 0.66575
+2026-11-06 14:05:40.763 | INFO     | __main__:for_run:90 - loaded top_40_aids_v116.parquet (rank < 40): 62,885,858 rows in 0.5s
+2026-11-06 14:14:45.393 | INFO     | __main__:main:175 - 564_3: 90,062,550 rows in 545.2s
+2026-11-06 14:14:55.161 | INFO     | __main__:main:179 - 564_3: recall carts 0.41965, orders 0.66089
+2026-11-06 14:14:55.296 | INFO     | __main__:for_run:90 - loaded top_40_buy2buy_v90.parquet (rank < 40): 24,179,021 rows in 0.1s
+2026-11-06 14:14:55.440 | INFO     | __main__:for_run:90 - loaded top_40_buy2buy_v99.parquet (rank < 40): 18,734,371 rows in 0.1s
+2026-11-06 14:23:34.530 | INFO     | __main__:main:175 - 564_4: 90,062,550 rows in 519.4s
+2026-11-06 14:23:43.935 | INFO     | __main__:main:179 - 564_4: recall carts 0.35812, orders 0.62545
+2026-11-06 14:23:44.171 | INFO     | __main__:for_run:90 - loaded top_40_aids_v217.parquet (rank < 5): 8,807,279 rows in 0.2s
+2026-11-06 14:23:44.674 | INFO     | __main__:for_run:90 - loaded top_40_aids_v220.parquet (rank < 55): 58,005,017 rows in 0.5s
+2026-11-06 14:32:16.940 | INFO     | __main__:main:175 - 564_5: 90,062,550 rows in 513.0s
+2026-11-06 14:32:25.982 | INFO     | __main__:main:179 - 564_5: recall carts 0.45078, orders 0.67152
+2026-11-06 14:32:26.541 | INFO     | __main__:for_run:90 - loaded top_40_aids_v232.parquet (rank < 55): 67,058,203 rows in 0.6s
+2026-11-06 14:32:27.309 | INFO     | __main__:for_run:90 - loaded top_40_aids_v235.parquet (rank < 5): 9,170,499 rows in 0.8s
+2026-11-06 14:42:09.981 | INFO     | __main__:main:175 - 564_6: 90,062,550 rows in 584.0s
+2026-11-06 14:42:20.509 | INFO     | __main__:main:179 - 564_6: recall carts 0.46205, orders 0.67858
+2026-11-06 14:42:20.659 | INFO     | __main__:for_run:90 - loaded top_40_aids_v239.parquet (rank < 20): 18,694,947 rows in 0.1s
+2026-11-06 14:42:20.782 | INFO     | __main__:for_run:90 - loaded top_40_aids_v226.parquet (rank < 20): 7,455,190 rows in 0.1s
+2026-11-06 14:50:52.755 | INFO     | __main__:main:175 - 564_7: 90,062,550 rows in 512.2s
+2026-11-06 14:51:02.533 | INFO     | __main__:main:179 - 564_7: recall carts 0.44496, orders 0.67380
+2026-11-06 14:59:37.033 | INFO     | __main__:main:175 - 564_20: 90,062,550 rows in 514.5s
+2026-11-06 14:59:47.096 | INFO     | __main__:main:179 - 564_20: recall carts 0.34908, orders 0.61796
+2026-11-06 15:10:11.701 | INFO     | __main__:main:175 - 564_21: 90,062,550 rows in 624.6s
+2026-11-06 15:10:21.886 | INFO     | __main__:main:179 - 564_21: recall carts 0.44014, orders 0.67163
+2026-11-06 15:19:06.575 | INFO     | __main__:main:175 - 564_22: 90,062,550 rows in 524.7s
+2026-11-06 15:19:15.837 | INFO     | __main__:main:179 - 564_22: recall carts 0.36875, orders 0.63156
+2026-11-06 15:28:16.870 | INFO     | __main__:main:175 - 564_23: 90,062,550 rows in 541.0s
+2026-11-06 15:28:27.680 | INFO     | __main__:main:179 - 564_23: recall carts 0.43462, orders 0.66445
+2026-11-06 15:37:19.799 | INFO     | __main__:main:175 - 564_24: 90,062,550 rows in 532.1s
+2026-11-06 15:37:29.084 | INFO     | __main__:main:179 - 564_24: recall carts 0.44646, orders 0.67314
+2026-11-06 15:46:10.787 | INFO     | __main__:main:175 - 564_25: 90,062,550 rows in 521.7s
+2026-11-06 15:46:20.101 | INFO     | __main__:main:179 - 564_25: recall carts 0.41984, orders 0.65921
+2026-11-06 15:55:08.922 | INFO     | __main__:main:175 - 564_26: 90,062,550 rows in 528.8s
+2026-11-06 15:55:19.054 | INFO     | __main__:main:179 - 564_26: recall carts 0.35787, orders 0.62363
+2026-11-06 16:03:49.395 | INFO     | __main__:main:175 - 564_27: 90,062,550 rows in 510.3s
+2026-11-06 16:03:59.075 | INFO     | __main__:main:179 - 564_27: recall carts 0.45073, orders 0.66964
+2026-11-06 16:12:33.341 | INFO     | __main__:main:175 - 564_31: 90,062,550 rows in 514.3s
+2026-11-06 16:12:42.815 | INFO     | __main__:main:179 - 564_31: recall carts 0.43443, orders 0.66595
+2026-11-06 16:22:20.592 | INFO     | __main__:main:175 - 564_32: 90,062,550 rows in 577.8s
+2026-11-06 16:22:30.459 | INFO     | __main__:main:179 - 564_32: recall carts 0.46513, orders 0.67876
+2026-11-06 16:22:31.305 | INFO     | __main__:for_run:90 - loaded top_80_aids_v93.parquet (rank < 20): 33,119,977 rows in 0.8s
+2026-11-06 16:23:37.990 | INFO     | __main__:main:175 - 564_33: 90,062,550 rows in 67.5s
+2026-11-06 16:23:43.373 | INFO     | __main__:main:179 - 564_33: recall clicks 0.56833
+2026-11-06 16:23:43.652 | INFO     | __main__:for_run:90 - loaded top_40_aids_v217.parquet (rank < 20): 25,220,106 rows in 0.3s
+2026-11-06 16:23:44.747 | INFO     | __main__:for_run:90 - loaded top_40_aids_v235.parquet (rank < 10): 18,187,309 rows in 1.1s
+2026-11-06 16:23:45.111 | INFO     | __main__:for_run:90 - loaded top_40_aids_v115.parquet (rank < 20): 30,880,831 rows in 0.4s
+2026-11-06 16:42:12.278 | INFO     | __main__:main:175 - 564_F_clicks: 90,062,550 rows in 1108.9s
+2026-11-06 16:42:17.581 | INFO     | __main__:main:179 - 564_F_clicks: recall clicks 0.58367
+root@66f424ac0d20:/workspace# 
