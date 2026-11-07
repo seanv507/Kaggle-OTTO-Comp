@@ -1,5 +1,6 @@
-"""Item embeddings from consecutive aids: Chris Deotte's embeddings-for-train.ipynb in
-plain PyTorch (the notebook fed the pairs with Merlin's dataloader).
+"""Item embeddings from consecutive aids: Chris Deotte's embeddings-for-train.ipynb (at
+upstream commit 2bb8962) in plain PyTorch (the notebook fed the pairs with Merlin's
+dataloader).
 
 Each aid gets a `dim`-vector, trained so that an aid and the next aid in its session
 score high (BCE with logits) and an aid and a shuffled next aid from the same batch score

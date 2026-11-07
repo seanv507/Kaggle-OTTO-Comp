@@ -1,9 +1,9 @@
 """Item and user features from Chris Deotte's part of the 3rd place OTTO solution.
 
 Converts the item-features-* / user-features-* notebooks of train/item_user_features/
-(run by script.ipynb). Each `FEATURES` entry is one notebook: a function of the train or
-test events returning a LazyFrame keyed by `aid` or `session`, with the notebook's
-columns in its order. `features_reference.py` holds the pandas transcriptions the tests
+(run by script.ipynb; removed after conversion, read them at upstream commit 2bb8962).
+Each `FEATURES` entry is one notebook: a function of the train or test events returning
+a LazyFrame keyed by `aid` or `session`, with the notebook's columns in its order. `features_reference.py` holds the pandas transcriptions the tests
 compare against.
 
 Conventions:

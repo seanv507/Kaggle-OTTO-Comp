@@ -26,3 +26,8 @@ and writes `item_embed_32.npy`, indexed by aid:
 An epoch takes ~36 s on the local RTX 2050 (149M pairs). `embeddings.py` explains a
 quirk it reproduces: the notebook trained one logit per coordinate product, not the dot
 product (`--dot` trains the dot product instead).
+
+Chris's original notebooks (the `item-features-*` / `user-features-*` notebooks,
+`embeddings-for-train.ipynb` and the driver `script.ipynb`) were removed after
+conversion. Read them at upstream commit `2bb8962`, e.g.
+`git show 2bb8962:train/item_user_features/item-features-4.ipynb`.

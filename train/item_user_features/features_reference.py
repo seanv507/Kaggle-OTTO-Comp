@@ -1,7 +1,8 @@
 """Pandas ports of Chris Deotte's item/user feature notebooks, used by test_features.py.
 
-Each function transcribes one notebook in train/item_user_features/ (cuDF -> pandas,
-cupy -> numpy) as literally as possible. Input `df` has `ts` in epoch seconds, as in the
+Each function transcribes one notebook of train/item_user_features/ (at upstream commit
+2bb8962; cuDF -> pandas, cupy -> numpy) as literally as possible. Input `df` has `ts` in
+epoch seconds, as in the
 reference (see `to_reference_frame`). Each returns the frame the notebook writes, with
 its index (aid or session) reset to a column. Deliberate changes:
 - item_12 / item_13 tile the observed number of days instead of a literal 21 / 7.
