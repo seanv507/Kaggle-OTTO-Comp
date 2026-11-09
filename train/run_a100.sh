@@ -60,6 +60,7 @@ REPO=${REPO:-https://github.com/seanv507/Kaggle-OTTO-Comp.git}
 BRANCH=${BRANCH:-infer}
 HF_DATASET=${HF_DATASET:-seanv507/kaggle-otto-multi-objective}
 WORK=${WORK:-/workspace}
+COVISIT_ARGS=${COVISIT_ARGS:-}  # extra save_covisits.py args, e.g. "--chunk 95=2000000 99=2000000" on a GPU smaller than 80 GB
 UPLOAD=${UPLOAD:-1}  # 0: keep the outputs on the pod only
 UPLOAD_ROWS=${UPLOAD_ROWS:-0}  # 1: also upload the merged rows (~60 GB)
 STOP_POD=${STOP_POD:-1}  # 0: leave the pod running at the end (e.g. to inspect it)
@@ -230,7 +231,7 @@ fi
 step "3. covisitation matrices"
 run train/covisit_matrices/save_covisits.py \
     --train "data/$TRAIN.parquet" --test "data/$TEST.parquet" \
-    --out "data/covisit_matrices_$SPLIT" 2>&1 | tee -a "$LOGS/covisits_$SPLIT.log"
+    --out "data/covisit_matrices_$SPLIT" $COVISIT_ARGS 2>&1 | tee -a "$LOGS/covisits_$SPLIT.log"
 # upload now, so a later failure does not lose them (unchanged files are skipped)
 if [ "$UPLOAD" = 1 ]; then
     upload "data/covisit_matrices_$SPLIT" "covisit_matrices_$SPLIT" \
