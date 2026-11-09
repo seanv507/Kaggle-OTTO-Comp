@@ -19,6 +19,9 @@ Chris's pipeline, which runs once on train to fit models and once on all data fo
 3. item and user features: `train/item_user_features/`
 4. merge candidates, features and targets: `train/make_parquets/`
 5. XGBoost/CatBoost rankers: `train/ranker_models/`
+6. LB inference and submission (`infer/`): stages 1-4 on all data, the rankers' predictions, the top 20
+
+Step 6 reuses stages 1-4 on shifted LB inputs rather than porting the infer notebooks; see docs/infer.md.
 
 When converting, read the matching reference notebook first. In `covisits.py`, function names map to notebook numbers. For example, `covisits.make_covisits_90` corresponds to `train/covisit_matrices/cpu-90.ipynb`, and `make_covisits_115` to `gpu-115.ipynb`. The converted train covisit notebooks (and their driver `script.ipynb`) have been removed from this directory; read them from upstream commit `2bb8962`, e.g. `git show 2bb8962:train/covisit_matrices/cpu-90.ipynb`.
 
@@ -34,7 +37,8 @@ Chris's notebooks keep their places and the Polars code sits beside them, except
 - `train/item_user_features/features.py`: the 14 item/user feature notebooks (removed; see commit `2bb8962`), one `FEATURES` entry each, with pandas ports in `features_reference.py`; `save_features.py` writes them. `embeddings.py` / `save_embeddings.py`: the item embeddings notebook in plain PyTorch; it reproduces the notebook's per-coordinate training (see its docstring). PyTorch comes from the `cu132` or `cpu` extra.
 - `train/make_parquets/merge.py`: the rankers' training rows of Make-152/172/174, steps A-G (removed; see commit `2bb8962`), with pandas ports in `merge_reference.py`; `save_merged.py` writes `train_v<model>/part-NNN.parquet` per session chunk. The column order is part of the interface: the rankers use `columns[2:]` minus the target. Step H (`click_oof`) is in `train/ranker_models/rankers.py`.
 - `train/ranker_models/rankers.py`: the XGBoost rankers of XGB-186/406/412 (removed; see commit `2bb8962`) and step H (`click_oof`); `train_rankers.py` trains clicks, adds `click_oof`, then carts and orders, and prints recall@20. Training is random, so the tests check the deterministic parts by hand rather than against a reference. The CatBoost notebooks are not ported (the LB inference uses XGBoost only).
-- `train/run_a100.sh`: the whole train pipeline on the local-validation split on a cloud GPU pod (matrices to rankers, ending with recall@20 and the score), launched as the pod's start command; it uploads results to HF and stops the pod. Its header lists the pod requirements (CUDA 13, >= 150 GB volume, >= 64 GB RAM).
+- `train/run_a100.sh`: the whole train pipeline on the local-validation split on a cloud GPU pod (matrices to rankers, ending with recall@20 and the score), launched as the pod's start command; it uploads results to HF and stops the pod. Its header lists the pod requirements (CUDA 13, >= 150 GB volume, >= 64 GB RAM). `SPLIT=lb` runs the LB inference instead (below).
+- `infer/`: the LB run. **Read [docs/infer.md](docs/infer.md) first.** It does not port Chris's infer notebooks one by one. It reruns the train modules on `infer/lb_data.py`'s `lb_train`/`lb_test`: train weeks 2-4 and the test week, moved back 7 days so that the train code's time constants apply. Then `infer/inference_LB/predict.py` scores the rows with the valid run's rankers (`models_valid`) and writes the submission. The infer notebooks are an older variant of the train ones; docs/infer.md lists the differences and the notebook map.
 - `data/labels.py`, `data/testset.py`: ground-truth labels and the train/test split (being converted to Polars), the counterpart of `data/make_train_valid.ipynb`.
 - `event_types.py` (root): integer codes for the `type` column, shared by all stages.
 - `diary.md`: the user's working notes.

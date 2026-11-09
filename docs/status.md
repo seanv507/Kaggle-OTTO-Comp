@@ -1,4 +1,4 @@
-# Status (2026-11-08)
+# Status (2026-11-09)
 
 Where the Polars conversion stands, and what to do next.
 
@@ -25,9 +25,7 @@ All five stages of Chris's train pipeline are converted, tested against pandas p
 
 ## Where things are
 
-- **Code:** branch `ranker_models` (pushed) holds everything. The branches stack:
-  `candidate_generation` → `item_user_features` → `make_parquets` → `ranker_models`.
-  `main` is not updated yet. Locally it is 12 commits ahead of `origin/main`, unpushed, and 27 commits behind `ranker_models`.
+- **Code:** `main` was fast-forwarded to `ranker_models` (2a511a8) and pushed on 2026-11-09, so the two are identical. The `infer/` conversion is on branch `infer` (from `main`), which the pod's start command now fetches.
 - **HF dataset** `seanv507/kaggle-otto-multi-objective`:
 
   | folder | contents |
@@ -38,20 +36,36 @@ All five stages of Chris's train pipeline are converted, tested against pandas p
   | `logs/valid_run/gmr1vifevc2x4e/` | logs, including `summary.txt` |
 
   **`candidate_scores_valid/` is missing:** its upload failed and left no trace in the logs. The exit trap now uploads the logs again last (commit `30923e3`), so a failure like this will show up. The merged rows were never uploaded (that is the default, `UPLOAD_ROWS=0`).
-- **Pod `gmr1vifevc2x4e` (`otto-valid-full`)** is EXITED, so only its 200 GB volume is billing.
-  - The decision is to terminate it and not recover the candidates.
-  - Terminating it from Claude was blocked by the auto-mode permission check, so terminate it in the Runpod console.
-  - If the candidates are needed again, regenerate them from the matrices on HF (about 1.5 h on an A100). The merged rows then take another 11 min.
+- **Pod `gmr1vifevc2x4e`** has been terminated; `candidate_scores_valid/` is lost. If it is needed again, regenerate it from the matrices on HF (about 1.5 h on an A100), then the merged rows (11 min).
 - **How to launch a run:** see the header of `train/run_a100.sh` and `docs/runpod-launching.md`.
-  - The pod's start command fetches the script from the `ranker_models` branch.
+  - The pod's start command fetches the script from the `infer` branch (the URL in the start command and `BRANCH` in `run_a100.sh` must match).
   - Progress notifications go to ntfy. The topic is a Runpod secret, and locally it is in `~/.config/ntfy_topic`.
-- `errors.log` (untracked) is an old log from the 2026-11-06 pod and can be deleted.
+
+## LB inference (`infer/`)
+
+Converted on 2026-11-09; see [infer.md](infer.md). The train modules run unchanged on
+`lb_train` / `lb_test` (train weeks 2-4 and the test week moved back 7 days), and
+`infer/inference_LB/predict.py` scores the rows with `models_valid` and writes the
+submission. `SPLIT=lb bash train/run_a100.sh` runs it all and uploads `submission_lb/` to HF.
+
+A local smoke run on a sample (1% of `lb_train` sessions, 2% of `lb_test`, 33,436
+sessions) went through every stage and wrote a well-formed submission. That checks that
+the stages run on the LB data and that the LB rows have every feature the rankers use; it
+says nothing about the score.
+
+**Prediction speed.** The fold models have about 3,100 trees each (clicks fold 0: best
+iteration 3097). On the local machine (RTX 2050, 4 GB), one fold on 400k rows takes 2.5 s
+on the CPU and 25 s on the GPU, so the GPU is 10x slower there. The full LB has about 1.67M
+sessions, roughly 167M rows per target. At the local CPU rate that is about 1.5 h for
+clicks, and about twice that each for carts and orders, which also compute `click_oof`. The
+A100 GPU has not been measured. `predict.py` logs the time per part, so check the first
+parts of the pod run and pass `--device cpu` if the GPU is slower there too.
 
 ## Next
 
-1. Terminate pod `gmr1vifevc2x4e` (console).
-2. Merge `ranker_models` into `main`, which stacks all the branches above.
-3. Convert `infer/` (the LB run: covisits on all data, candidates, features, rankers' predictions, the submission).
+1. Push branch `infer` (the pod fetches the script from GitHub).
+2. Run `SPLIT=lb` on an A100 pod. Without ranker training it should take about 2-3 h plus prediction.
+3. Submit `submission_lb.csv` to Kaggle by hand and compare with Chris's LB 0.601 (docs/solutions.md; his CV 0.601 includes features we lack, ours is 0.58902).
 4. Optional:
    - simplify candidates (step 11 of the candidates plan: one run with a score column per rule);
    - speed up the clicks ranker (3 h 40);

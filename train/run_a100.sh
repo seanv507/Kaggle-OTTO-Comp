@@ -3,6 +3,13 @@
 # matrices, candidates, features, embeddings, merged rows and the three rankers, ending
 # with the out-of-fold recall@20 per target and the weighted score (Chris: 0.590).
 #
+# SPLIT=lb runs the LB inference instead (Chris's infer/): the same stages on the LB
+# inputs of infer/lb_data.py (train weeks 2-4 + the Kaggle test week, moved back 7 days
+# so they line up with the valid split; see docs/infer.md), merged rows without targets,
+# then the valid run's rankers (models_valid on HF) predict and write the submission,
+# data/submission_lb.csv (uploaded to HF as submission_lb/). Submitting it to Kaggle is
+# left to you. Its volume needs are about the same as the valid run's.
+#
 # Needs an NVIDIA driver with CUDA 13 (e.g. an A100; not a V100), HF_TOKEN with write
 # access to the HF dataset (for the uploads), >= 150 GB on the volume (merged rows ~60 GB,
 # matrices ~10 GB, candidates ~7 GB, the environment) and >= 64 GB RAM (the clicks
@@ -12,25 +19,29 @@
 # As the pod's start command (preferred: no SSH needed, the pod stops itself at the end).
 # Set the env vars HF_TOKEN={{ RUNPOD_SECRET_HF_TOKEN }} and NTFY_TOPIC={{ RUNPOD_SECRET_NTFY_TOPIC }}
 # (Runpod secrets) and the start command to:
-#   bash -c '(/start.sh >/workspace/start.log 2>&1 &); mkdir -p /workspace/logs; curl -sSL https://raw.githubusercontent.com/seanv507/Kaggle-OTTO-Comp/ranker_models/train/run_a100.sh | bash 2>&1 | tee -a /workspace/logs/run.log; sleep infinity'
+#   bash -c '(/start.sh >/workspace/start.log 2>&1 &); mkdir -p /workspace/logs; curl -sSL https://raw.githubusercontent.com/seanv507/Kaggle-OTTO-Comp/infer/train/run_a100.sh | bash 2>&1 | tee -a /workspace/logs/run.log; sleep infinity'
 # /start.sh (in Runpod's images) keeps SSH and Jupyter available for debugging; `sleep
 # infinity` stops a failed script from restart-looping the container if the self-stop
 # below cannot run. The branch in the URL and BRANCH below must match.
 #
 # Or by hand over SSH (inside tmux, so a dropped connection does not kill it):
 #   export HF_TOKEN=...
-#   curl -sSL https://raw.githubusercontent.com/seanv507/Kaggle-OTTO-Comp/ranker_models/train/run_a100.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/seanv507/Kaggle-OTTO-Comp/infer/train/run_a100.sh | bash
 # or, from a checkout: bash train/run_a100.sh
 #
 # Steps (each skips the outputs it already has, so a rerun resumes; the rankers retrain):
 #   1. clone/update the repo, uv sync (with PyTorch for CUDA)
 #   2. download local_valid/ (valid_train, valid_test, valid_test_labels) from HF
+#      (lb: train.parquet, test.parquet, then infer/lb_data.py -> data/lb_train, lb_test)
 #   3. save_covisits.py on valid_train + valid_test   -> data/covisit_matrices_valid
 #   4. save_candidates.py on valid_test, with recall  -> data/candidate_scores_valid
 #   5. save_features.py                               -> data/item_user_features_valid
 #   6. save_embeddings.py                             -> .../item_embed_32.npy
 #   7. save_merged.py                                 -> data/train_with_features_valid
 #   8. train_rankers.py, with recall@20 and the score -> data/models_valid
+#      (lb: infer/inference_LB/predict.py with HF's models_valid -> data/submission_lb.csv)
+# (lb: every _valid above is _lb, the inputs are lb_train / lb_test, step 4 pads with the
+# LB test week's popular items and reports no recall, step 7 writes infer_with_features_lb)
 # Notifications (if NTFY_TOPIC is set): ntfy.sh on each completed step (with the candidate
 # and ranker recalls), at the end, and with high priority on failure.
 # Uploads to HF (if UPLOAD=1): the matrices after step 3; on exit, success or failure, the
@@ -39,8 +50,14 @@
 # /workspace and bills only its storage, but its GPU may be taken meanwhile.
 set -euo pipefail
 
+SPLIT=${SPLIT:-valid}  # valid: train the rankers; lb: the LB inference and submission
+case "$SPLIT" in
+    valid) TRAIN=valid_train TEST=valid_test ROWS=train_with_features_valid ;;
+    lb) TRAIN=lb_train TEST=lb_test ROWS=infer_with_features_lb ;;
+    *) echo "SPLIT must be valid or lb, not $SPLIT"; exit 2 ;;
+esac
 REPO=${REPO:-https://github.com/seanv507/Kaggle-OTTO-Comp.git}
-BRANCH=${BRANCH:-ranker_models}
+BRANCH=${BRANCH:-infer}
 HF_DATASET=${HF_DATASET:-seanv507/kaggle-otto-multi-objective}
 WORK=${WORK:-/workspace}
 UPLOAD=${UPLOAD:-1}  # 0: keep the outputs on the pod only
@@ -63,7 +80,7 @@ NTFY_SERVER=${NTFY_SERVER:-https://ntfy.sh}
 # stop, so keep it and uv's cache on the container disk
 export UV_PROJECT_ENVIRONMENT=${UV_PROJECT_ENVIRONMENT:-/root/otto-venv}
 export UV_CACHE_DIR=${UV_CACHE_DIR:-/root/.cache/uv}
-# HF folder for this run's logs: one per pod, so runs on different pods do not mix
+# HF folder for this run's logs (logs/<split>_run/<id>): one per pod, so runs on different pods do not mix
 RUN_ID=${RUN_ID:-${RUNPOD_POD_ID:-local}}
 
 export HF_XET_HIGH_PERFORMANCE=1
@@ -81,7 +98,7 @@ upload() {  # upload <local dir> <path in the dataset> <message>
 
 notify() {  # notify <message> [priority]
     [ -n "${NTFY_TOPIC:-}" ] || return 0
-    curl -fsS -m 15 -o /dev/null -H "Title: OTTO valid run${RUNPOD_POD_ID:+ ($RUNPOD_POD_ID)}" \
+    curl -fsS -m 15 -o /dev/null -H "Title: OTTO $SPLIT run${RUNPOD_POD_ID:+ ($RUNPOD_POD_ID)}" \
         -H "Priority: ${2:-default}" -d "$1" "$NTFY_SERVER/$NTFY_TOPIC" || echo "ntfy failed"
 }
 
@@ -105,16 +122,21 @@ $(tail -n 5 "$LOGS/run.log" 2>/dev/null)" high
     fi
     if [ "$UPLOAD" = 1 ]; then
         # what exists so far (all of it on success); hf upload skips unchanged files
-        upload "$LOGS" "logs/valid_run/$RUN_ID" "Logs of the valid run $RUN_ID (exit $status)"
-        upload "$OUT/candidate_scores_valid" candidate_scores_valid "Candidates on the local-validation split (exit $status)"
-        upload "$OUT/item_user_features_valid" item_user_features_valid "Item/user features and embeddings on the local-validation split (exit $status)"
-        upload "$OUT/models_valid" models_valid "Rankers on the local-validation split (exit $status)"
+        upload "$LOGS" "logs/${SPLIT}_run/$RUN_ID" "Logs of the $SPLIT run $RUN_ID (exit $status)"
+        upload "$OUT/candidate_scores_$SPLIT" "candidate_scores_$SPLIT" "Candidates on the $SPLIT split (exit $status)"
+        upload "$OUT/item_user_features_$SPLIT" "item_user_features_$SPLIT" "Item/user features and embeddings on the $SPLIT split (exit $status)"
+        if [ "$SPLIT" = valid ]; then
+            upload "$OUT/models_valid" models_valid "Rankers on the local-validation split (exit $status)"
+        elif [ -e "$OUT/submission_lb.csv" ]; then
+            mkdir -p "$WORK/submission_lb" && cp "$OUT/submission_lb.csv" "$WORK/submission_lb/submission_lb.csv"
+            upload "$WORK/submission_lb" submission_lb "LB submission (exit $status, commit $(cat "$LOGS/commit.txt" 2>/dev/null))"
+        fi
         if [ "$UPLOAD_ROWS" = 1 ]; then
-            upload "$OUT/train_with_features_valid" train_with_features_valid "Merged rows on the local-validation split (exit $status)"
+            upload "$OUT/$ROWS" "$ROWS" "Merged rows on the $SPLIT split (exit $status)"
         fi
         # again, so run.log on HF records how the uploads above went (a failed candidates
         # upload on 2026-11-07 left no trace: the logs had gone up first)
-        upload "$LOGS" "logs/valid_run/$RUN_ID" "Logs of the valid run $RUN_ID after the uploads (exit $status)"
+        upload "$LOGS" "logs/${SPLIT}_run/$RUN_ID" "Logs of the $SPLIT run $RUN_ID after the uploads (exit $status)"
     fi
     if [ "$STOP_POD" = 1 ] && [ -n "${RUNPOD_POD_ID:-}" ]; then
         if [ "$status" != 0 ] && [ "$FAIL_GRACE_MIN" -gt 0 ]; then
@@ -188,57 +210,81 @@ done
 
 # 2. inputs (data/ is tracked, so link the files rather than the directory)
 step "2. inputs"
-hf download "$HF_DATASET" --repo-type dataset --include "local_valid/*" --local-dir "$WORK/hf"
-for f in valid_train valid_test valid_test_labels; do
-    ln -sf "$WORK/hf/local_valid/$f.parquet" "data/$f.parquet"
-done
+if [ "$SPLIT" = valid ]; then
+    hf download "$HF_DATASET" --repo-type dataset --include "local_valid/*" --local-dir "$WORK/hf"
+    for f in valid_train valid_test valid_test_labels; do
+        ln -sf "$WORK/hf/local_valid/$f.parquet" "data/$f.parquet"
+    done
+else
+    hf download "$HF_DATASET" train.parquet test.parquet --repo-type dataset --local-dir "$WORK/hf"
+    if [ ! -e "$WORK/hf/lb_test.parquet" ]; then
+        run infer/lb_data.py --train "$WORK/hf/train.parquet" --test "$WORK/hf/test.parquet" \
+            --out "$WORK/hf" 2>&1 | tee -a "$LOGS/lb_data.log"
+    fi
+    for f in lb_train lb_test; do
+        ln -sf "$WORK/hf/$f.parquet" "data/$f.parquet"
+    done
+fi
 
 # 3. covisitation matrices (existing ones are skipped unless --overwrite)
 step "3. covisitation matrices"
 run train/covisit_matrices/save_covisits.py \
-    --train data/valid_train.parquet --test data/valid_test.parquet \
-    --out data/covisit_matrices_valid 2>&1 | tee -a "$LOGS/covisits_valid.log"
+    --train "data/$TRAIN.parquet" --test "data/$TEST.parquet" \
+    --out "data/covisit_matrices_$SPLIT" 2>&1 | tee -a "$LOGS/covisits_$SPLIT.log"
 # upload now, so a later failure does not lose them (unchanged files are skipped)
 if [ "$UPLOAD" = 1 ]; then
-    upload data/covisit_matrices_valid covisit_matrices_valid \
-        "Covisitation matrices on the local-validation split ($(cat "$LOGS/commit.txt"))"
+    upload "data/covisit_matrices_$SPLIT" "covisit_matrices_$SPLIT" \
+        "Covisitation matrices on the $SPLIT split ($(cat "$LOGS/commit.txt"))"
 fi
 
 # 4. candidates + recall (existing runs are skipped, recall is still printed)
 step "4. candidates"
+if [ "$SPLIT" = valid ]; then
+    CAND_ARGS=(--labels data/valid_test_labels.parquet)  # Chris's popular lists (of valid_test)
+else
+    CAND_ARGS=(--popular events)  # the LB test week's popular items; no labels
+fi
 run train/candidates/save_candidates.py \
-    --events data/valid_test.parquet --covisits data/covisit_matrices_valid \
-    --out data/candidate_scores_valid --labels data/valid_test_labels.parquet \
-    --chunk "$CHUNK" 2>&1 | tee -a "$LOGS/candidates_valid.log"
-DETAIL=$(grep -E "(709_[a-z]+|564_F_[a-z]+): recall" "$LOGS/candidates_valid.log" | sed 's/.* - //' | sort -u || true)
+    --events "data/$TEST.parquet" --covisits "data/covisit_matrices_$SPLIT" \
+    --out "data/candidate_scores_$SPLIT" "${CAND_ARGS[@]}" \
+    --chunk "$CHUNK" 2>&1 | tee -a "$LOGS/candidates_$SPLIT.log"
+DETAIL=$(grep -E "(709_[a-z]+|564_F_[a-z]+): recall" "$LOGS/candidates_$SPLIT.log" | sed 's/.* - //' | sort -u || true)
 
 # 5. item and user features (existing files are skipped)
 step "5. features"
 run train/item_user_features/save_features.py \
-    --train data/valid_train.parquet --test data/valid_test.parquet \
-    --out data/item_user_features_valid 2>&1 | tee -a "$LOGS/features_valid.log"
+    --train "data/$TRAIN.parquet" --test "data/$TEST.parquet" \
+    --out "data/item_user_features_$SPLIT" 2>&1 | tee -a "$LOGS/features_$SPLIT.log"
 
 # 6. item embeddings (20 epochs on the GPU)
 step "6. embeddings"
-if [ ! -e data/item_user_features_valid/item_embed_32.npy ]; then
+if [ ! -e "data/item_user_features_$SPLIT/item_embed_32.npy" ]; then
     run train/item_user_features/save_embeddings.py \
-        --train data/valid_train.parquet --test data/valid_test.parquet \
-        --out data/item_user_features_valid 2>&1 | tee -a "$LOGS/embeddings_valid.log"
+        --train "data/$TRAIN.parquet" --test "data/$TEST.parquet" \
+        --out "data/item_user_features_$SPLIT" 2>&1 | tee -a "$LOGS/embeddings_$SPLIT.log"
 fi
 
 # 7. merged rows (existing parts are skipped)
 step "7. merged rows"
 run train/make_parquets/save_merged.py \
-    --events data/valid_test.parquet --labels data/valid_test_labels.parquet \
-    --candidates data/candidate_scores_valid --features data/item_user_features_valid \
-    --out data/train_with_features_valid --chunk "$MERGE_CHUNK" 2>&1 | tee -a "$LOGS/merged_valid.log"
+    --events "data/$TEST.parquet" --labels "$([ "$SPLIT" = valid ] && echo data/valid_test_labels.parquet || echo none)" \
+    --candidates "data/candidate_scores_$SPLIT" --features "data/item_user_features_$SPLIT" \
+    --out "data/$ROWS" --chunk "$MERGE_CHUNK" 2>&1 | tee -a "$LOGS/merged_$SPLIT.log"
 
-# 8. rankers, out-of-fold recall@20 and the score
-step "8. rankers"
-run train/ranker_models/train_rankers.py \
-    --rows data/train_with_features_valid --labels data/valid_test_labels.parquet \
-    --out data/models_valid 2>&1 | tee -a "$LOGS/rankers_valid.log"
-
-{ grep -hE "recall@20|score " "$LOGS/rankers_valid.log" || true; } | sed 's/.* - //' | tee "$LOGS/summary.txt"
+if [ "$SPLIT" = valid ]; then
+    # 8. rankers, out-of-fold recall@20 and the score
+    step "8. rankers"
+    run train/ranker_models/train_rankers.py \
+        --rows data/train_with_features_valid --labels data/valid_test_labels.parquet \
+        --out data/models_valid 2>&1 | tee -a "$LOGS/rankers_valid.log"
+    { grep -hE "recall@20|score " "$LOGS/rankers_valid.log" || true; } | sed 's/.* - //' | tee "$LOGS/summary.txt"
+else
+    # 8. the valid run's rankers predict the LB rows; the submission
+    step "8. predictions"
+    hf download "$HF_DATASET" --repo-type dataset --include "models_valid/*" --local-dir "$WORK/hf"
+    run infer/inference_LB/predict.py --rows "data/$ROWS" --models "$WORK/hf/models_valid" \
+        --out data/submission_lb.csv 2>&1 | tee -a "$LOGS/predict_lb.log"
+    { grep -hE "rows .* sessions" "$LOGS/predict_lb.log" || true; } | sed 's/.* - //' | tee "$LOGS/summary.txt"
+fi
 DETAIL=$(cat "$LOGS/summary.txt")
 step "done"
