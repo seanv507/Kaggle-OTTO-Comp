@@ -45,6 +45,17 @@ CT = 100  # candidates per session of model 709
 SWAP = ("wgt", "score_30")
 
 
+def default_device(arg: str | None = None) -> str:
+    """`arg` if given, else "cuda" if XGBoost can train on it, else "cpu"."""
+    if arg:
+        return arg
+    try:
+        xgb.train({"device": "cuda", "tree_method": "hist"}, xgb.DMatrix([[0.0]], label=[0.0]), 1)
+        return "cuda"
+    except xgb.core.XGBoostError:
+        return "cpu"
+
+
 def params(target: str, device: str = "cpu", seed: int = 42, lr: float = 0.1) -> dict:
     p = {
         "max_depth": 4,
@@ -223,14 +234,38 @@ def load_model(path: Path) -> xgb.Booster:
     return model
 
 
-def click_oof(rows: pl.DataFrame, clicks_models: Path, device: str = "cpu") -> pl.DataFrame:
-    """Step H: `rows` (train_v172 / train_v174) with `click_oof` appended."""
-    features = json.loads((clicks_models / "features.json").read_text())
+def fold_models(models: Path) -> list[Path]:
+    return sorted(models.glob("fold*.ubj"))
+
+
+def predict_folds(rows: pl.DataFrame, models: Path, device: str = "cpu") -> np.ndarray:
+    """The mean prediction of the fold models in `models` (train() output) on every row,
+    as the LB inference does (infer/inference_LB/LB-1/11/21)."""
+    features = json.loads((models / "features.json").read_text())
+    X = rows.select(features).to_numpy().astype(np.float32, copy=False)
+    paths = fold_models(models)
+    out = np.zeros(len(rows), dtype=np.float32)
+    for path in paths:
+        model = load_model(path)
+        model.set_param({"device": device})
+        out += predict(model, X) / len(paths)
+    return out
+
+
+def click_oof(rows: pl.DataFrame, clicks_models: Path, device: str = "cpu", average: bool = False) -> pl.DataFrame:
+    """Step H: `rows` (train_v172 / train_v174) with `click_oof` appended.
+
+    The clicks models see the rows with `wgt` and `score_30` swapped. Training rows
+    (`average=False`): each session is scored by the fold model that held it out. LB rows
+    (`average=True`, infer/make_parquets_LB/Make-175-G): the mean of all fold models."""
     swapped = rows.with_columns(pl.col(SWAP[0]).alias(SWAP[1]), pl.col(SWAP[1]).alias(SWAP[0]))
+    if average:
+        return rows.with_columns(click_oof=pl.Series(predict_folds(swapped, clicks_models, device)))
+    features = json.loads((clicks_models / "features.json").read_text())
     X = swapped.select(features).to_numpy().astype(np.float32, copy=False)
     users = rows["user"].to_numpy()
     out = np.zeros(len(rows), dtype=np.float32)  # sessions in no clicks fold keep 0, as the notebook
-    for path in sorted(clicks_models.glob("fold*.ubj")):
+    for path in fold_models(clicks_models):
         fold = path.stem.removeprefix("fold")
         mask = np.isin(users, np.load(clicks_models / f"valid_users_f{fold}.npy"))
         model = load_model(path)

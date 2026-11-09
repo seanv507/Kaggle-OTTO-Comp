@@ -122,6 +122,18 @@ def test_click_oof_swaps_and_uses_the_held_out_fold(tmp_path):
                                    rtol=1e-6)
 
 
+def test_click_oof_average_is_the_mean_of_the_folds(tmp_path):
+    clicks = _rows("clicks")
+    rankers.train(_parts(clicks, tmp_path / "rows"), "clicks", tmp_path, n_folds=3, num_boost_round=10, early_stopping_rounds=5,
+                  verbose_eval=False)
+    rows = _rows("orders", n_users=70, seed=1).drop("orders")  # LB rows: no target
+    got = rankers.click_oof(rows, tmp_path, average=True)
+    assert got.columns == rows.columns + ["click_oof"]
+    X = rows.rename({"wgt": "score_30", "score_30": "wgt"}).select(json.loads((tmp_path / "features.json").read_text())).to_numpy()
+    want = np.mean([rankers.predict(rankers.load_model(tmp_path / f"fold{k}.ubj"), X) for k in range(3)], axis=0)
+    np.testing.assert_allclose(got["click_oof"].to_numpy(), want, rtol=1e-5)
+
+
 def test_params():
     assert rankers.params("clicks")["objective"] == "binary:logistic"
     assert rankers.params("carts", "cuda")["objective"] == "rank:pairwise"

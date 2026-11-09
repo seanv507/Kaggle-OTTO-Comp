@@ -82,8 +82,13 @@ def _left(users: pl.LazyFrame, other: pl.LazyFrame, on) -> pl.LazyFrame:
     return users.join(other, on=on, how="left", maintain_order="left")
 
 
-def step_a(cands: dict[str, pl.LazyFrame], labels: pl.LazyFrame, use: str, keep_positive_users: bool) -> pl.LazyFrame:
+def step_a(cands: dict[str, pl.LazyFrame], labels: pl.LazyFrame | None, use: str, keep_positive_users: bool) -> pl.LazyFrame:
+    """The base run's candidates and, with `labels`, the target column. Without labels
+    (the LB: infer/make_parquets_LB's Make-161-A / Make-175-A) every session is kept and
+    there is no target column."""
     users = _candidates(cands[base_run(use)], "wgt").select("user", "item", "pos", "wgt")
+    if labels is None:
+        return users
     truth = (
         labels.filter(pl.col("type") == TYPE[use])
         .select(user=pl.col("session").cast(pl.Int32), item=pl.col("ground_truth"))
@@ -219,7 +224,7 @@ def step_g(users: pl.DataFrame, events: pl.LazyFrame, emb: np.ndarray, engine) -
 def make(
     model: str,
     cands: dict[str, pl.LazyFrame],
-    labels: pl.LazyFrame,
+    labels: pl.LazyFrame | None,
     events: pl.LazyFrame | pl.DataFrame,
     feats: dict[str, pl.LazyFrame],
     embed: np.ndarray,
@@ -230,7 +235,8 @@ def make(
 
     `cands`: candidate run -> save_candidates.py file; `feats`: feature name ->
     save_features.py file; `embed`: save_embeddings.py's array; `giba_embed`: Giba's
-    embbedings_fm10.npy for step G (the notebook falls back to `embed` without it)."""
+    embbedings_fm10.npy for step G (the notebook falls back to `embed` without it).
+    `labels=None` gives the LB rows (Make-161 / Make-175): no target column, all sessions."""
     use = TARGET[model]
     events = events.lazy()
     sessions = events.select(pl.col("session").unique())

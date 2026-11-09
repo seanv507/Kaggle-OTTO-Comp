@@ -10,6 +10,8 @@ pl.scan_parquet). Rows within a part are sorted by user, pos.
 Usage:
     python train/make_parquets/save_merged.py   # local-validation split, all three models
     python train/make_parquets/save_merged.py --model 172 --chunk 100000 --sessions 20000
+    python train/make_parquets/save_merged.py --events data/lb_test.parquet --labels none \
+        --candidates data/candidate_scores_lb --features data/item_user_features_lb --out data/infer_with_features_lb
 """
 
 import argparse
@@ -30,7 +32,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--model", nargs="+", choices=list(merge.TARGET), default=list(merge.TARGET))
     parser.add_argument("--events", default="data/valid_test.parquet", help="the sessions to rank, sorted by session, ts")
-    parser.add_argument("--labels", default="data/valid_test_labels.parquet", help="session, type, ground_truth")
+    parser.add_argument("--labels", default="data/valid_test_labels.parquet",
+                        help="session, type, ground_truth; 'none' for the LB rows (no target column, all sessions)")
     parser.add_argument("--candidates", default="data/candidate_scores_valid", help="save_candidates.py output")
     parser.add_argument("--features", default="data/item_user_features_valid",
                         help="save_features.py output (and item_embed_32.npy from save_embeddings.py)")
@@ -48,7 +51,7 @@ def main() -> None:
     feats = {name: pl.scan_parquet(features / f"{name}.parquet") for name in FEATURE_NAMES}
     embed = np.load(args.embed or features / "item_embed_32.npy")
     giba = np.load(args.giba_embed) if args.giba_embed else None
-    labels = pl.scan_parquet(args.labels)
+    labels = None if args.labels == "none" else pl.scan_parquet(args.labels)
     events = pl.scan_parquet(args.events).with_columns(pl.col("session", "aid").cast(pl.Int32))
     if args.sessions:
         first = events.select(pl.col("session").unique().sort().head(args.sessions)).collect()

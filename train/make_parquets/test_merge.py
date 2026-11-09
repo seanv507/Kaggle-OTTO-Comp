@@ -127,6 +127,20 @@ def test_matches_reference(model, engine):
         assert got.group_by("user").agg(pl.col(use).sum())[use].min() > 0
 
 
+@pytest.mark.parametrize("model", ["152", "172", "174"])
+def test_without_labels(model):
+    """The LB rows: the labelled rows of every session, without the target column."""
+    events, cands, labels, feats, embed = _data()
+    args = ({k: v.lazy() for k, v in cands.items()}, events, {k: v.lazy() for k, v in feats.items()}, embed)
+    got = merge.make(model, args[0], None, *args[1:])
+    use = merge.TARGET[model]
+    assert use not in got.columns
+    assert got["user"].n_unique() == events["session"].n_unique()
+    # labelled rows exist only for sessions with a positive (except 152): compare those
+    want = merge.make(model, args[0], labels.lazy(), *args[1:]).drop(use)
+    assert_frame_equal(got.join(want.select("user").unique(), on="user", how="semi", maintain_order="left"), want)
+
+
 def test_score_columns_hand_checked():
     """Session 0: 709 lists aids 5, 6, 5 (padding repeats 5); a 564 run scores 6 and pads 5."""
     sch = {"session": pl.Int32, "pos": pl.Int32, "aid": pl.Int32, "score": pl.Float64}

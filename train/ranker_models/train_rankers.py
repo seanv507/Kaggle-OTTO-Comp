@@ -17,22 +17,11 @@ import time
 from pathlib import Path
 
 import polars as pl
-import xgboost as xgb
 from loguru import logger
 
 import rankers
 
 WEIGHTS = {"clicks": 0.10, "carts": 0.30, "orders": 0.60}
-
-
-def _device(arg):
-    if arg:
-        return arg
-    try:
-        xgb.train({"device": "cuda", "tree_method": "hist"}, xgb.DMatrix([[0.0]], label=[0.0]), 1)
-        return "cuda"
-    except xgb.core.XGBoostError:
-        return "cpu"
 
 
 def add_click_oof(rows_dir: Path, model: str, clicks_models: Path, device: str, overwrite: bool) -> Path:
@@ -60,7 +49,7 @@ def main() -> None:
     parser.add_argument("--overwrite", action="store_true", help="rebuild click_oof rows that exist")
     args = parser.parse_args()
 
-    device = _device(args.device)
+    device = rankers.default_device(args.device)
     rows_dir, out = Path(args.rows), Path(args.out)
     # every session of the rows (train_v152 has them all) counts in recall, with or without candidates
     sessions = pl.scan_parquet(rows_dir / "train_v152").select(session=pl.col("user").unique())
